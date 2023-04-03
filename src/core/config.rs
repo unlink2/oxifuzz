@@ -14,30 +14,33 @@ lazy_static! {
 #[cfg_attr(feature = "cli", derive(Parser))]
 #[cfg_attr(feature = "cli", command(author, version, about, long_about = None))]
 pub struct Config {
-    input: Option<PathBuf>,
+    pub input: Option<PathBuf>,
 
-    output: Option<PathBuf>,
+    pub output: Option<PathBuf>,
 
     #[cfg_attr(feature = "cli", clap(long, short, default_value = "OXIFUZZ"))]
-    replace_word: String,
+    pub replace_word: String,
 
     #[cfg_attr(feature = "cli", clap(long, short))]
-    word_lists: Vec<PathBuf>,
+    pub word_lists: Vec<PathBuf>,
 
     #[cfg_attr(feature = "cli", clap(long))]
-    word: Vec<String>,
+    pub word: Vec<String>,
 
     #[cfg_attr(feature = "cli", clap(long, short, default_value_t = 1))]
-    n_run: u32,
+    pub n_run: u32,
 
     #[cfg_attr(feature = "cli", clap(long, default_value = "\n"))]
-    word_list_term: String,
+    pub word_list_term: String,
 
     #[cfg_attr(feature = "cli", clap(long))]
-    random_file: Option<PathBuf>,
+    pub random_file: Option<PathBuf>,
 
     #[cfg_attr(feature = "cli", clap(long))]
-    seed: u32,
+    pub seed: u32,
+
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub verbose: u8,
 
     #[cfg_attr(feature = "cli", clap(long, value_name = "SHELL"))]
     #[cfg(feature = "cli")]
