@@ -1,0 +1,21 @@
+[package]
+name = "oxifuzz"
+description = ""
+version = "0.1.0"
+edition = "2021"
+authors = ["Lukas Krickl <lukas@krickl.dev>"]
+license = "MIT"
+# license-file = "./LICENSE"
+readme = "README.md"
+repository = "https://github.com/unlink2/rust-template"
+
+[features]
+default = ["cli"]
+cli = ["dep:clap", "dep:clap_complete"]
+
+[dependencies]
+anyhow = "1.0.68"
+clap = { version = "4.0.32", features = ["derive"], optional = true }
+clap_complete = { version = "4.0.7", optional = true }
+lazy_static = "1.4.0"
+thiserror = "1.0.38"
