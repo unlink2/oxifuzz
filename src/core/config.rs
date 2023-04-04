@@ -42,9 +42,9 @@ pub struct Config {
     pub random_file: Option<PathBuf>,
 
     #[cfg_attr(feature = "cli", clap(long))]
-    pub seed: u32,
+    pub seed: Option<u64>,
 
-    #[cfg_attr(feature = "cli", clap(long))]
+    #[cfg_attr(feature = "cli", clap(long, default_value = "0"))]
     pub verbose: u8,
 
     #[cfg_attr(feature = "cli", clap(long, value_name = "SHELL"))]

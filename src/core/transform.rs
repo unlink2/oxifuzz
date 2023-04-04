@@ -15,8 +15,16 @@ impl Default for Target {
 }
 
 impl Target {
-    fn should_replace(&self, input: &[u8]) -> bool {
-        false
+    pub fn should_replace(&self, input: &[u8]) -> bool {
+        match self {
+            Target::Word(word) => input.starts_with(word),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Target::Word(word) => word.len(),
+        }
     }
 }
 
@@ -40,7 +48,44 @@ impl Context {
         &self.words[index as usize]
     }
 
-    fn apply(&mut self) -> FResult<()> {
+    fn read_all(&mut self) -> FResult<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.input.read_to_end(&mut buf)?;
+        Ok(buf)
+    }
+
+    fn output(&mut self, input: &[u8]) -> FResult<()> {
+        self.output.write(input)?;
+        Ok(())
+    }
+
+    fn apply_next(&mut self, input: &[u8]) -> FResult<usize> {
+        if input.is_empty() {
+            Ok(0)
+        } else if self.target.should_replace(input) {
+            // FIXME to not clone word...
+            let word = &self.select_word().to_owned();
+            self.output(&word)?;
+            Ok(self.target.len())
+        } else {
+            self.output(&input[0..1])?;
+            Ok(1)
+        }
+    }
+
+    pub fn apply(&mut self) -> FResult<()> {
+        let input = self.read_all()?;
+
+        let mut data = &input[0..];
+        while !data.is_empty() {
+            let read = self.apply_next(data)?;
+            if read == 0 {
+                break;
+            }
+
+            data = &data[read..];
+        }
+
         Ok(())
     }
 }
