@@ -8,4 +8,6 @@ pub enum Error {
     Unknown,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }

@@ -1,10 +1,15 @@
-use std::path::PathBuf;
+use std::{
+    io::{BufReader, LineWriter, Read, Write},
+    path::PathBuf,
+};
 
 #[cfg(feature = "cli")]
 use clap::{CommandFactory, Parser};
 #[cfg(feature = "cli")]
 use clap_complete::{generate, Generator, Shell};
 use lazy_static::lazy_static;
+
+use super::error::FResult;
 
 lazy_static! {
     pub static ref CFG: Config = Config::new();
@@ -18,8 +23,8 @@ pub struct Config {
 
     pub output: Option<PathBuf>,
 
-    #[cfg_attr(feature = "cli", clap(long, short, default_value = "OXIFUZZ"))]
-    pub replace_word: String,
+    #[cfg_attr(feature = "cli", clap(long, short, default_value = crate::core::transform::DEFAULT_TARGET_WORD))]
+    pub target: String,
 
     #[cfg_attr(feature = "cli", clap(long, short))]
     pub word_lists: Vec<PathBuf>,
@@ -56,6 +61,22 @@ impl Config {
     #[cfg(not(feature = "cli"))]
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn input(&self) -> FResult<Box<dyn Read>> {
+        Ok(if let Some(path) = &self.input {
+            Box::new(BufReader::new(std::fs::File::open(path)?))
+        } else {
+            Box::new(BufReader::new(std::io::stdin()))
+        })
+    }
+
+    pub fn output(&self) -> FResult<Box<dyn Write>> {
+        Ok(if let Some(path) = &self.output {
+            Box::new(LineWriter::new(std::fs::File::create(path)?))
+        } else {
+            Box::new(LineWriter::new(std::io::stdout().lock()))
+        })
     }
 }
 
