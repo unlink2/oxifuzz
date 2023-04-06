@@ -39,7 +39,14 @@ pub struct Context {
 
 impl Context {
     pub fn from_cfg(cfg: &Config) -> FResult<Self> {
-        todo!()
+        Ok(Self {
+            input: cfg.input()?,
+            output: cfg.output()?,
+
+            words: cfg.words()?,
+            target: Target::Word(cfg.target.to_owned().into_bytes()),
+            rand: cfg.rand(),
+        })
     }
 
     fn select_word(&mut self) -> &Word {

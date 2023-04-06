@@ -9,7 +9,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete::{generate, Generator, Shell};
 use lazy_static::lazy_static;
 
-use super::error::FResult;
+use super::{error::FResult, rand::Rand, transform::Word};
 
 lazy_static! {
     pub static ref CFG: Config = Config::new();
@@ -77,6 +77,14 @@ impl Config {
         } else {
             Box::new(LineWriter::new(std::io::stdout().lock()))
         })
+    }
+
+    pub fn rand(&self) -> Rand {
+        todo!()
+    }
+
+    pub fn words(&self) -> FResult<Vec<Word>> {
+        todo!()
     }
 }
 
