@@ -81,17 +81,32 @@ impl Context {
         Ok(())
     }
 
-    fn apply_next(&mut self, input: &[u8]) -> FResult<usize> {
+    fn maybe_compare(&self, cmd_output: &[u8]) -> FResult<()> {
+        Ok(())
+    }
+
+    fn maybe_exec(&self, data: &Word) -> FResult<()> {
+        if let Some(cmd) = &self.cmd {
+            self.maybe_compare(&[]);
+        }
+
+        Ok(())
+    }
+
+    fn apply_next(&mut self, input: &[u8], result: &mut Word) -> FResult<usize> {
         if input.is_empty() {
             Ok(0)
         } else if self.target.should_replace(input) {
-            // FIXME to not clone word...
+            // FIXME do not clone word...
             let word = &self.select_word().to_owned();
             self.output(&word)?;
+            result.extend_from_slice(&word);
             Ok(self.target.len())
         } else {
-            self.output(&input[0..1])?;
-            Ok(1)
+            let d = &input[0..1];
+            self.output(d)?;
+            result.extend_from_slice(d);
+            Ok(d.len())
         }
     }
 
@@ -102,14 +117,17 @@ impl Context {
 
         for _ in 0..self.n_run {
             let mut data = &input[0..];
+            let mut result = Vec::new();
             while !data.is_empty() {
-                let read = self.apply_next(data)?;
+                let read = self.apply_next(data, &mut result)?;
                 if read == 0 {
                     break;
                 }
 
                 data = &data[read..];
             }
+
+            self.maybe_exec(&result)?;
         }
 
         Ok(())
