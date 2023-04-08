@@ -8,6 +8,7 @@ use clap::{CommandFactory, Parser};
 #[cfg(feature = "cli")]
 use clap_complete::{generate, Generator, Shell};
 use lazy_static::lazy_static;
+use log::debug;
 
 use super::{error::FResult, rand::Rand, transform::Word};
 
@@ -23,11 +24,34 @@ pub struct Config {
 
     pub output: Option<PathBuf>,
 
-    #[cfg_attr(feature = "cli", clap(long, short, default_value = crate::core::transform::DEFAULT_TARGET_WORD))]
+    #[cfg_attr(feature = "cli", clap(long, help = "Run command for each output"))]
+    pub exec: Option<String>,
+
+    #[cfg_attr(
+        feature = "cli",
+        clap(
+            long,
+            help = "Look for this specific output and notify the user when found"
+        )
+    )]
+    pub expect: Option<String>,
+
+    #[cfg_attr(feature = "cli", clap(long, help = "Expected command lenght"))]
+    pub expect_len: Option<usize>,
+
+    #[cfg_attr(feature = "cli", clap(long, short, 
+        help="The target substring that will be replaced with words", 
+        default_value = crate::core::transform::DEFAULT_TARGET_WORD))]
     pub target: String,
 
-    #[cfg_attr(feature = "cli", clap(long, short))]
-    pub word_lists: Vec<PathBuf>,
+    #[cfg_attr(feature = "cli", clap(long, short, help = "List of words"))]
+    pub word_list: Vec<PathBuf>,
+
+    #[cfg_attr(
+        feature = "cli",
+        clap(long, help = "Add content of an entire file as a word")
+    )]
+    pub word_file: Vec<PathBuf>,
 
     #[cfg_attr(feature = "cli", clap(long))]
     pub word: Vec<String>,
@@ -44,8 +68,11 @@ pub struct Config {
     #[cfg_attr(feature = "cli", clap(long))]
     pub seed: Option<u64>,
 
-    #[cfg_attr(feature = "cli", clap(long, default_value = "0"))]
+    #[cfg_attr(feature = "cli", arg(short, long, action = clap::ArgAction::Count))]
     pub verbose: u8,
+
+    #[cfg_attr(feature = "cli", arg(long, help = "Output as bytes instead of chars"))]
+    pub raw: bool,
 
     #[cfg_attr(feature = "cli", clap(long, value_name = "SHELL"))]
     #[cfg(feature = "cli")]
@@ -80,11 +107,39 @@ impl Config {
     }
 
     pub fn rand(&self) -> Rand {
-        todo!()
+        if let Some(seed) = self.seed {
+            Rand::from_seed(seed)
+        } else if let Some(path) = &self.random_file {
+            Rand::File(path.to_owned())
+        } else {
+            Rand::default()
+        }
     }
 
     pub fn words(&self) -> FResult<Vec<Word>> {
-        todo!()
+        let mut res: Vec<Word> = self.word.iter().map(|x| x.clone().into_bytes()).collect();
+
+        for path in &self.word_list {
+            let all = std::fs::read_to_string(path)?;
+            res.append(
+                &mut all
+                    .split(&self.word_list_term)
+                    .map(|x| x.to_owned().into_bytes())
+                    .collect(),
+            );
+        }
+
+        for path in &self.word_file {
+            let mut f = std::fs::File::open(path)?;
+            let mut buffer = Vec::new();
+            f.read_to_end(&mut buffer)?;
+
+            res.push(buffer);
+        }
+
+        debug!("Word list: {:?}", res);
+
+        Ok(res)
     }
 }
 

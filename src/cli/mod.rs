@@ -1,6 +1,7 @@
 use crate::core::{
     config::{generate_completion, Config},
     error::FResult,
+    transform::Context,
 };
 
 use log::LevelFilter;
@@ -27,5 +28,8 @@ pub fn init(cfg: &Config) -> FResult<()> {
         generate_completion(shell);
         std::process::exit(0);
     }
+
+    let ctx = Context::from_cfg(cfg)?;
+
     Ok(())
 }
