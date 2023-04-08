@@ -29,7 +29,6 @@ pub fn init(cfg: &Config) -> FResult<()> {
         std::process::exit(0);
     }
 
-    let ctx = Context::from_cfg(cfg)?;
-
-    Ok(())
+    let mut ctx = Context::from_cfg(cfg)?;
+    ctx.apply()
 }

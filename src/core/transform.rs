@@ -1,3 +1,5 @@
+use log::debug;
+
 use super::{config::Config, error::FResult, rand::Rand};
 
 pub type Word = Vec<u8>;
@@ -35,6 +37,14 @@ pub struct Context {
     words: Vec<Word>,
     target: Target,
     rand: Rand,
+
+    cmd: Option<String>,
+    cmd_args: Vec<String>,
+
+    expect: Option<String>,
+    expect_len: Option<usize>,
+
+    n_run: u32,
 }
 
 impl Context {
@@ -46,6 +56,11 @@ impl Context {
             words: cfg.words()?,
             target: Target::Word(cfg.target.to_owned().into_bytes()),
             rand: cfg.rand(),
+            cmd: cfg.cmd(),
+            cmd_args: cfg.cmd_args().unwrap_or(vec![]),
+            expect: cfg.expect.to_owned(),
+            expect_len: cfg.expect_len,
+            n_run: cfg.n_run,
         })
     }
 
@@ -83,14 +98,18 @@ impl Context {
     pub fn apply(&mut self) -> FResult<()> {
         let input = self.read_all()?;
 
-        let mut data = &input[0..];
-        while !data.is_empty() {
-            let read = self.apply_next(data)?;
-            if read == 0 {
-                break;
-            }
+        debug!("Input: {:?}", input);
 
-            data = &data[read..];
+        for _ in 0..self.n_run {
+            let mut data = &input[0..];
+            while !data.is_empty() {
+                let read = self.apply_next(data)?;
+                if read == 0 {
+                    break;
+                }
+
+                data = &data[read..];
+            }
         }
 
         Ok(())

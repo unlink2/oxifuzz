@@ -141,6 +141,33 @@ impl Config {
 
         Ok(res)
     }
+
+    // returns the command as well as args
+    pub fn cmd(&self) -> Option<String> {
+        if let Some(exec) = &self.exec {
+            let mut split = exec.split_whitespace();
+            let command = split.next().unwrap_or("").to_owned();
+
+            debug!("Command {:?}", command);
+
+            Some(command)
+        } else {
+            None
+        }
+    }
+
+    pub fn cmd_args(&self) -> Option<Vec<String>> {
+        if let Some(exec) = &self.exec {
+            let mut split = exec.split_whitespace().skip(1);
+            let args = split.map(|x| x.to_owned()).collect();
+
+            debug!("Args {:?}", args);
+
+            Some(args)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(feature = "cli")]
