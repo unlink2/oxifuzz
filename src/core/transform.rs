@@ -1,6 +1,6 @@
-use log::debug;
-
 use super::{config::Config, error::FResult, rand::Rand};
+use console::style;
+use log::debug;
 
 pub type Word = Vec<u8>;
 
@@ -45,6 +45,7 @@ pub struct Context {
     expect_len: Option<usize>,
 
     n_run: u32,
+    raw: bool,
 }
 
 impl Context {
@@ -61,6 +62,7 @@ impl Context {
             expect: cfg.expect.to_owned(),
             expect_len: cfg.expect_len,
             n_run: cfg.n_run,
+            raw: cfg.raw,
         })
     }
 
@@ -76,8 +78,16 @@ impl Context {
         Ok(buf)
     }
 
-    fn output(&mut self, input: &[u8]) -> FResult<()> {
-        self.output.write(input)?;
+    fn output(&mut self, input: &[u8], hit: bool) -> FResult<()> {
+        if hit && !self.raw {
+            write!(
+                self.output,
+                "{}",
+                style(String::from_utf8_lossy(input)).red()
+            )?
+        } else {
+            self.output.write(input)?;
+        }
         Ok(())
     }
 
@@ -99,12 +109,12 @@ impl Context {
         } else if self.target.should_replace(input) {
             // FIXME do not clone word...
             let word = &self.select_word().to_owned();
-            self.output(&word)?;
+            self.output(&word, true)?;
             result.extend_from_slice(&word);
             Ok(self.target.len())
         } else {
             let d = &input[0..1];
-            self.output(d)?;
+            self.output(d, false)?;
             result.extend_from_slice(d);
             Ok(d.len())
         }
