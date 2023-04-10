@@ -39,8 +39,13 @@ pub struct Config {
     #[cfg_attr(feature = "cli", clap(long, help = "Expected command lenght"))]
     pub expect_len: Option<usize>,
 
+    #[cfg_attr(feature = "cli", clap(long, help = "Replace target for command args",
+        default_value =crate::core::transform::DEFAULT_TARGET_WORD))]
+    pub exec_target: String,
+
     #[cfg_attr(feature = "cli", clap(long, short, 
-        help="The target substring that will be replaced with words", 
+        help="The target substring that will be replaced with words. 
+        If the target string appears in the cli arguments it will be replaced with an entire iteration's output, otherwise the output will be passed in via stdin.", 
         default_value = crate::core::transform::DEFAULT_TARGET_WORD))]
     pub target: String,
 
@@ -158,7 +163,7 @@ impl Config {
 
     pub fn cmd_args(&self) -> Option<Vec<String>> {
         if let Some(exec) = &self.exec {
-            let mut split = exec.split_whitespace().skip(1);
+            let split = exec.split_whitespace().skip(1);
             let args = split.map(|x| x.to_owned()).collect();
 
             debug!("Args {:?}", args);

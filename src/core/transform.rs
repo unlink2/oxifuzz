@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use super::{config::Config, error::FResult, rand::Rand};
 use console::style;
 use log::debug;
@@ -36,6 +38,7 @@ pub struct Context {
 
     words: Vec<Word>,
     target: Target,
+    cmd_arg_target: String,
     rand: Rand,
 
     cmd: Option<String>,
@@ -53,6 +56,8 @@ impl Context {
         Ok(Self {
             input: cfg.input()?,
             output: cfg.output()?,
+
+            cmd_arg_target: cfg.exec_target.to_owned(),
 
             words: cfg.words()?,
             target: Target::Word(cfg.target.to_owned().into_bytes()),
@@ -79,6 +84,9 @@ impl Context {
     }
 
     fn output(&mut self, input: &[u8], hit: bool) -> FResult<()> {
+        if self.cmd.is_some() {
+            return Ok(());
+        }
         if hit && !self.raw {
             write!(
                 self.output,
@@ -91,13 +99,46 @@ impl Context {
         Ok(())
     }
 
-    fn maybe_compare(&self, cmd_output: &[u8]) -> FResult<()> {
-        Ok(())
+    fn maybe_compare_expected(&self, cmd_output: &[u8]) -> bool {
+        if let Some(expect) = &self.expect {
+            cmd_output == expect.as_bytes()
+        } else {
+            false
+        }
     }
 
-    fn maybe_exec(&self, data: &Word) -> FResult<()> {
+    fn maybe_compare_expected_len(&self, cmd_output: &[u8]) -> bool {
+        if let Some(len) = self.expect_len {
+            len == cmd_output.len()
+        } else {
+            false
+        }
+    }
+
+    fn did_compare_expected(&self) -> bool {
+        self.expect_len.is_none() || self.expect.is_none()
+    }
+
+    fn maybe_exec(&mut self, data: &Word) -> FResult<()> {
         if let Some(cmd) = &self.cmd {
-            self.maybe_compare(&[]);
+            let args: Vec<String> = self
+                .cmd_args
+                .iter()
+                .map(|x| x.replace(&self.cmd_arg_target, &String::from_utf8_lossy(data)))
+                .collect();
+
+            let output = Command::new(cmd).args(&args).output()?;
+            let output = String::from_utf8_lossy(&output.stdout);
+
+            if self.maybe_compare_expected(output.as_bytes())
+                || self.maybe_compare_expected_len(output.as_bytes())
+            {
+                write!(self.output, "{}", style(output).green())?;
+            } else if !self.did_compare_expected() {
+                write!(self.output, "{}", style(output).white())?;
+            } else {
+                write!(self.output, "{}", style(output).red())?;
+            }
         }
 
         Ok(())
