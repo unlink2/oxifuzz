@@ -1,3 +1,5 @@
+use std::process::ExitStatusError;
+
 use thiserror::Error;
 
 pub type FResult<T> = Result<T, Error>;
@@ -10,4 +12,6 @@ pub enum Error {
     Other(#[from] anyhow::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    ExitStatus(#[from] ExitStatusError),
 }

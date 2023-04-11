@@ -1,4 +1,7 @@
-use std::process::Command;
+use std::{
+    io::{BufReader, BufWriter, Write},
+    process::{Command, Stdio},
+};
 
 use super::{config::Config, error::FResult, rand::Rand};
 use console::style;
@@ -49,6 +52,7 @@ pub struct Context {
 
     n_run: u32,
     raw: bool,
+    no_stdin: bool,
 }
 
 impl Context {
@@ -68,6 +72,7 @@ impl Context {
             expect_len: cfg.expect_len,
             n_run: cfg.n_run,
             raw: cfg.raw,
+            no_stdin: cfg.no_stdin,
         })
     }
 
@@ -115,10 +120,6 @@ impl Context {
         }
     }
 
-    fn did_compare_expected(&self) -> bool {
-        self.expect_len.is_none() || self.expect.is_none()
-    }
-
     fn maybe_exec(&mut self, data: &Word) -> FResult<()> {
         if let Some(cmd) = &self.cmd {
             let args: Vec<String> = self
@@ -127,17 +128,28 @@ impl Context {
                 .map(|x| x.replace(&self.cmd_arg_target, &String::from_utf8_lossy(data)))
                 .collect();
 
-            let output = Command::new(cmd).args(&args).output()?;
-            let output = String::from_utf8_lossy(&output.stdout);
+            let mut child = Command::new(cmd)
+                .args(&args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+
+            if !self.no_stdin {
+                let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
+                child_in.write_all(&data)?;
+            }
+            child.wait()?;
+
+            let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
+            let output = std::io::read_to_string(&mut child_out)?;
+            let output = output.trim_end();
 
             if self.maybe_compare_expected(output.as_bytes())
                 || self.maybe_compare_expected_len(output.as_bytes())
             {
-                write!(self.output, "{}", style(output).green())?;
-            } else if !self.did_compare_expected() {
-                write!(self.output, "{}", style(output).white())?;
+                writeln!(self.output, "{}", style(output).green())?;
             } else {
-                write!(self.output, "{}", style(output).red())?;
+                writeln!(self.output, "{}", style(output).white())?;
             }
         }
 

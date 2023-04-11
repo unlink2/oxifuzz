@@ -79,6 +79,12 @@ pub struct Config {
     #[cfg_attr(feature = "cli", arg(long, help = "Output as bytes instead of chars"))]
     pub raw: bool,
 
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, help = "Disable writing output data to child command's stdin")
+    )]
+    pub no_stdin: bool,
+
     #[cfg_attr(feature = "cli", clap(long, value_name = "SHELL"))]
     #[cfg(feature = "cli")]
     pub completions: Option<Shell>,
