@@ -38,6 +38,8 @@ pub struct Config {
 
     #[cfg_attr(feature = "cli", clap(long, help = "Expected command lenght"))]
     pub expect_len: Option<usize>,
+    #[cfg_attr(feature = "cli", clap(long, help = "Expected exit code"))]
+    pub expect_exit_code: Option<i32>,
 
     #[cfg_attr(feature = "cli", clap(long, help = "Replace target for command args",
         default_value =crate::core::transform::DEFAULT_TARGET_WORD))]

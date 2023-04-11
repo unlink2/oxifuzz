@@ -49,6 +49,7 @@ pub struct Context {
 
     expect: Option<String>,
     expect_len: Option<usize>,
+    expect_exit_code: Option<i32>,
 
     n_run: u32,
     raw: bool,
@@ -73,6 +74,7 @@ impl Context {
             n_run: cfg.n_run,
             raw: cfg.raw,
             no_stdin: cfg.no_stdin,
+            expect_exit_code: cfg.expect_exit_code,
         })
     }
 
@@ -138,16 +140,17 @@ impl Context {
                 let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
                 child_in.write_all(&data)?;
             }
-            child.wait()?;
-
+            let exit_code = child.wait()?;
             let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
             let output = std::io::read_to_string(&mut child_out)?;
             let output = output.trim_end();
 
-            if self.expect.is_none() && self.expect_len.is_none() {
+            if self.expect.is_none() && self.expect_len.is_none() && self.expect_exit_code.is_none()
+            {
                 writeln!(self.output, "{}", style(output).white())?;
             } else if self.maybe_compare_expected(output.as_bytes())
                 || self.maybe_compare_expected_len(output.as_bytes())
+                || (exit_code.code() == self.expect_exit_code && self.expect_exit_code.is_some())
             {
                 writeln!(
                     self.output,
