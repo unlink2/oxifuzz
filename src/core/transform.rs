@@ -147,9 +147,9 @@ impl Context {
             if self.maybe_compare_expected(output.as_bytes())
                 || self.maybe_compare_expected_len(output.as_bytes())
             {
-                writeln!(self.output, "{}", style(output).green())?;
+                writeln!(self.output, "++ {}", style(output).green())?;
             } else {
-                writeln!(self.output, "{}", style(output).white())?;
+                writeln!(self.output, "-- {}", style(output).white())?;
             }
         }
 
