@@ -144,12 +144,19 @@ impl Context {
             let output = std::io::read_to_string(&mut child_out)?;
             let output = output.trim_end();
 
-            if self.maybe_compare_expected(output.as_bytes())
+            if self.expect.is_none() && self.expect_len.is_none() {
+                writeln!(self.output, "{}", style(output).white())?;
+            } else if self.maybe_compare_expected(output.as_bytes())
                 || self.maybe_compare_expected_len(output.as_bytes())
             {
-                writeln!(self.output, "++ {}", style(output).green())?;
+                writeln!(
+                    self.output,
+                    "{} {}",
+                    style("+").green(),
+                    style(output).green()
+                )?;
             } else {
-                writeln!(self.output, "-- {}", style(output).white())?;
+                writeln!(self.output, "{} {}", style("-").red(), style(output).red())?;
             }
         }
 
