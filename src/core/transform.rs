@@ -35,6 +35,33 @@ impl Target {
     }
 }
 
+/// Function that runs a command and returns an exit code and the output of the command
+pub type CommandRunner =
+    fn(ctx: &Context, data: &Word, cmd: &str, args: &[&str]) -> FResult<(Option<i32>, String)>;
+
+pub fn default_command_runner(
+    ctx: &Context,
+    data: &Word,
+    cmd: &str,
+    args: &[&str],
+) -> FResult<(Option<i32>, String)> {
+    let mut child = Command::new(cmd)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    if !ctx.no_stdin {
+        let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
+        child_in.write_all(&data)?;
+    }
+    let exit_code = child.wait()?;
+    let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
+    let output = std::io::read_to_string(&mut child_out)?;
+
+    Ok((exit_code.code(), output))
+}
+
 pub struct Context {
     input: Box<dyn std::io::Read>,
     output: Box<dyn std::io::Write>,
@@ -54,10 +81,16 @@ pub struct Context {
     n_run: u32,
     raw: bool,
     no_stdin: bool,
+
+    runner: CommandRunner,
 }
 
 impl Context {
     pub fn from_cfg(cfg: &Config) -> FResult<Self> {
+        Self::from_cfg_with_runner(cfg, default_command_runner)
+    }
+
+    pub fn from_cfg_with_runner(cfg: &Config, runner: CommandRunner) -> FResult<Self> {
         Ok(Self {
             input: cfg.input()?,
             output: cfg.output()?,
@@ -75,6 +108,8 @@ impl Context {
             raw: cfg.raw,
             no_stdin: cfg.no_stdin,
             expect_exit_code: cfg.expect_exit_code,
+
+            runner,
         })
     }
 
@@ -129,20 +164,9 @@ impl Context {
                 .iter()
                 .map(|x| x.replace(&self.cmd_arg_target, &String::from_utf8_lossy(data)))
                 .collect();
+            let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
 
-            let mut child = Command::new(cmd)
-                .args(&args)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .spawn()?;
-
-            if !self.no_stdin {
-                let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
-                child_in.write_all(&data)?;
-            }
-            let exit_code = child.wait()?;
-            let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
-            let output = std::io::read_to_string(&mut child_out)?;
+            let (exit_code, output) = (self.runner)(self, data, cmd, &args)?;
             let output = output.trim_end();
 
             if self.expect.is_none() && self.expect_len.is_none() && self.expect_exit_code.is_none()
@@ -150,7 +174,7 @@ impl Context {
                 writeln!(self.output, "{}", style(output).white())?;
             } else if self.maybe_compare_expected(output.as_bytes())
                 || self.maybe_compare_expected_len(output.as_bytes())
-                || (exit_code.code() == self.expect_exit_code && self.expect_exit_code.is_some())
+                || (exit_code == self.expect_exit_code && self.expect_exit_code.is_some())
             {
                 writeln!(
                     self.output,
