@@ -61,6 +61,11 @@ impl CommandRunner {
         }
     }
 
+    pub fn from_cfg(_cfg: &Config) -> Self {
+        // TODO implement from cfg
+        Self::shell_runner()
+    }
+
     pub fn run(
         &self,
         ctx: &Context,
@@ -121,7 +126,7 @@ pub struct Context {
 
 impl Context {
     pub fn from_cfg(cfg: &Config) -> FResult<Self> {
-        Self::from_cfg_with_runner(cfg, CommandRunner::shell_runner())
+        Self::from_cfg_with_runner(cfg, CommandRunner::from_cfg(cfg))
     }
 
     pub fn from_cfg_with_runner(cfg: &Config, runner: CommandRunner) -> FResult<Self> {
