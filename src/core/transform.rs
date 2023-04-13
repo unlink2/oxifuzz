@@ -36,11 +36,45 @@ impl Target {
 }
 
 /// Function that runs a command and returns an exit code and the output of the command
-pub type CommandRunner =
-    fn(ctx: &Context, data: &Word, cmd: &str, args: &[&str]) -> FResult<(Option<i32>, String)>;
+pub type CommandRunnerFn = fn(
+    ctx: &Context,
+    runner: &CommandRunnerKind,
+    data: &Word,
+    cmd: &str,
+    args: &[&str],
+) -> FResult<(Option<i32>, String)>;
+
+pub enum CommandRunnerKind {
+    Shell,
+}
+
+pub struct CommandRunner {
+    kind: CommandRunnerKind,
+    on_run: CommandRunnerFn,
+}
+
+impl CommandRunner {
+    pub fn shell_runner() -> Self {
+        Self {
+            kind: CommandRunnerKind::Shell,
+            on_run: default_command_runner,
+        }
+    }
+
+    pub fn run(
+        &self,
+        ctx: &Context,
+        data: &Word,
+        cmd: &str,
+        args: &[&str],
+    ) -> FResult<(Option<i32>, String)> {
+        (self.on_run)(ctx, &self.kind, data, cmd, args)
+    }
+}
 
 pub fn default_command_runner(
     ctx: &Context,
+    _runner: &CommandRunnerKind,
     data: &Word,
     cmd: &str,
     args: &[&str],
@@ -87,7 +121,7 @@ pub struct Context {
 
 impl Context {
     pub fn from_cfg(cfg: &Config) -> FResult<Self> {
-        Self::from_cfg_with_runner(cfg, default_command_runner)
+        Self::from_cfg_with_runner(cfg, CommandRunner::shell_runner())
     }
 
     pub fn from_cfg_with_runner(cfg: &Config, runner: CommandRunner) -> FResult<Self> {
@@ -166,7 +200,7 @@ impl Context {
                 .collect();
             let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
 
-            let (exit_code, output) = (self.runner)(self, data, cmd, &args)?;
+            let (exit_code, output) = self.runner.run(self, data, cmd, &args)?;
             let output = output.trim_end();
 
             if self.expect.is_none() && self.expect_len.is_none() && self.expect_exit_code.is_none()
