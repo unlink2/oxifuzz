@@ -4,7 +4,7 @@ use std::{
 };
 
 #[cfg(feature = "cli")]
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueEnum};
 #[cfg(feature = "cli")]
 use clap_complete::{generate, Generator, Shell};
 use lazy_static::lazy_static;
@@ -14,6 +14,14 @@ use super::{error::FResult, rand::Rand, transform::Word};
 
 lazy_static! {
     pub static ref CFG: Config = Config::new();
+}
+
+/// Runner kind without data attached
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub enum RunnerKindConfig {
+    #[default]
+    Shell,
 }
 
 #[derive(Debug, Default)]
@@ -86,6 +94,9 @@ pub struct Config {
         arg(long, help = "Disable writing output data to child command's stdin")
     )]
     pub no_stdin: bool,
+
+    #[cfg_attr(feature = "cli", clap(long, short, value_enum, default_value_t = RunnerKindConfig::Shell))]
+    pub runner: RunnerKindConfig,
 
     #[cfg_attr(feature = "cli", clap(long, value_name = "SHELL"))]
     #[cfg(feature = "cli")]

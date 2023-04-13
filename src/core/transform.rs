@@ -44,10 +44,12 @@ pub type CommandRunnerFn = fn(
     args: &[&str],
 ) -> FResult<(Option<i32>, String)>;
 
+#[derive(Clone)]
 pub enum CommandRunnerKind {
     Shell,
 }
 
+#[derive(Clone)]
 pub struct CommandRunner {
     kind: CommandRunnerKind,
     on_run: CommandRunnerFn,
@@ -61,9 +63,10 @@ impl CommandRunner {
         }
     }
 
-    pub fn from_cfg(_cfg: &Config) -> Self {
-        // TODO implement from cfg
-        Self::shell_runner()
+    pub fn from_cfg(cfg: &Config) -> Self {
+        match cfg.runner {
+            super::config::RunnerKindConfig::Shell => Self::shell_runner(),
+        }
     }
 
     pub fn run(
