@@ -8,6 +8,10 @@ pub type FResult<T> = Result<T, Error>;
 pub enum Error {
     #[error("Unknown error")]
     Unknown,
+    #[error("Unsupported command runner")]
+    UnsupportedCommandRunner,
+    #[error("Runner configuration is missing required options")]
+    InsufficientRunnerConfiguration,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error(transparent)]

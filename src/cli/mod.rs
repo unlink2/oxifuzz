@@ -1,7 +1,7 @@
 use crate::core::{
     config::{generate_completion, Config},
     error::FResult,
-    transform::Context,
+    transform::{Context, ExitCodes},
 };
 
 use log::LevelFilter;
@@ -18,7 +18,7 @@ fn verbose_to_level_filter(v: u8) -> LevelFilter {
     }
 }
 
-pub fn init(cfg: &Config) -> FResult<()> {
+pub fn init(cfg: &Config) -> FResult<ExitCodes> {
     SimpleLogger::new()
         .with_level(verbose_to_level_filter(cfg.verbose))
         .init()

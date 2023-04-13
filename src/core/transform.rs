@@ -3,9 +3,13 @@ use std::{
     process::{Command, Stdio},
 };
 
-use super::{config::Config, error::FResult, rand::Rand};
+use super::{
+    config::Config,
+    error::{Error, FResult},
+    rand::Rand,
+};
 use console::style;
-use log::debug;
+use log::{debug, error};
 
 pub type Word = Vec<u8>;
 
@@ -36,17 +40,13 @@ impl Target {
 }
 
 /// Function that runs a command and returns an exit code and the output of the command
-pub type CommandRunnerFn = fn(
-    ctx: &Context,
-    runner: &CommandRunnerKind,
-    data: &Word,
-    cmd: &str,
-    args: &[&str],
-) -> FResult<(Option<i32>, String)>;
+pub type CommandRunnerFn =
+    fn(ctx: &Context, runner: &CommandRunnerKind, data: &Word) -> FResult<(Option<i32>, String)>;
 
 #[derive(Clone)]
 pub enum CommandRunnerKind {
-    Shell,
+    Shell { cmd: String, cmd_args: Vec<String> },
+    None,
 }
 
 #[derive(Clone)]
@@ -56,52 +56,84 @@ pub struct CommandRunner {
 }
 
 impl CommandRunner {
-    pub fn shell_runner() -> Self {
-        Self {
-            kind: CommandRunnerKind::Shell,
-            on_run: default_command_runner,
+    pub fn shell_runner(cfg: &Config) -> FResult<Option<Self>> {
+        if let Some(cmd) = cfg.cmd() {
+            Ok(Some(Self {
+                kind: CommandRunnerKind::Shell {
+                    cmd,
+                    cmd_args: cfg.cmd_args().unwrap_or(vec![]),
+                },
+                on_run: default_command_runner,
+            }))
+        } else {
+            error!("Command shell runner configured without a command!");
+            Err(Error::InsufficientRunnerConfiguration)
         }
     }
 
-    pub fn from_cfg(cfg: &Config) -> Self {
+    pub fn from_cfg(cfg: &Config) -> FResult<Option<Self>> {
         match cfg.runner {
-            super::config::RunnerKindConfig::Shell => Self::shell_runner(),
+            super::config::RunnerKindConfig::Shell => Self::shell_runner(cfg),
+            super::config::RunnerKindConfig::None => Ok(None),
         }
     }
 
-    pub fn run(
-        &self,
-        ctx: &Context,
-        data: &Word,
-        cmd: &str,
-        args: &[&str],
-    ) -> FResult<(Option<i32>, String)> {
-        (self.on_run)(ctx, &self.kind, data, cmd, args)
+    pub fn run(&self, ctx: &Context, data: &Word) -> FResult<(Option<i32>, String)> {
+        (self.on_run)(ctx, &self.kind, data)
     }
 }
 
 pub fn default_command_runner(
     ctx: &Context,
-    _runner: &CommandRunnerKind,
+    runner: &CommandRunnerKind,
     data: &Word,
-    cmd: &str,
-    args: &[&str],
 ) -> FResult<(Option<i32>, String)> {
-    let mut child = Command::new(cmd)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
+    if let CommandRunnerKind::Shell { cmd, cmd_args } = runner {
+        let args: Vec<String> = cmd_args
+            .iter()
+            .map(|x| x.replace(&ctx.cmd_arg_target, &String::from_utf8_lossy(data)))
+            .collect();
+        let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
 
-    if !ctx.no_stdin {
-        let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
-        child_in.write_all(&data)?;
+        let mut child = Command::new(cmd)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        if !ctx.no_stdin {
+            let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
+            child_in.write_all(&data)?;
+        }
+        let exit_code = child.wait()?;
+        let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
+        let output = std::io::read_to_string(&mut child_out)?;
+
+        Ok((exit_code.code(), output))
+    } else {
+        Err(Error::UnsupportedCommandRunner)
     }
-    let exit_code = child.wait()?;
-    let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
-    let output = std::io::read_to_string(&mut child_out)?;
+}
 
-    Ok((exit_code.code(), output))
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum ExitCodes {
+    Success,
+    Failure,
+}
+
+impl ExitCodes {
+    pub fn is_failure(&self) -> bool {
+        *self != ExitCodes::Success
+    }
+}
+
+impl Into<i32> for ExitCodes {
+    fn into(self) -> i32 {
+        match self {
+            ExitCodes::Success => 0,
+            ExitCodes::Failure => 1,
+        }
+    }
 }
 
 pub struct Context {
@@ -113,9 +145,6 @@ pub struct Context {
     cmd_arg_target: String,
     rand: Rand,
 
-    cmd: Option<String>,
-    cmd_args: Vec<String>,
-
     expect: Option<String>,
     expect_len: Option<usize>,
     expect_exit_code: Option<i32>,
@@ -124,15 +153,15 @@ pub struct Context {
     raw: bool,
     no_stdin: bool,
 
-    runner: CommandRunner,
+    runner: Option<CommandRunner>,
 }
 
 impl Context {
     pub fn from_cfg(cfg: &Config) -> FResult<Self> {
-        Self::from_cfg_with_runner(cfg, CommandRunner::from_cfg(cfg))
+        Self::from_cfg_with_runner(cfg, CommandRunner::from_cfg(cfg)?)
     }
 
-    pub fn from_cfg_with_runner(cfg: &Config, runner: CommandRunner) -> FResult<Self> {
+    pub fn from_cfg_with_runner(cfg: &Config, runner: Option<CommandRunner>) -> FResult<Self> {
         Ok(Self {
             input: cfg.input()?,
             output: cfg.output()?,
@@ -142,8 +171,7 @@ impl Context {
             words: cfg.words()?,
             target: Target::Word(cfg.target.to_owned().into_bytes()),
             rand: cfg.rand(),
-            cmd: cfg.cmd(),
-            cmd_args: cfg.cmd_args().unwrap_or(vec![]),
+
             expect: cfg.expect.to_owned(),
             expect_len: cfg.expect_len,
             n_run: cfg.n_run,
@@ -151,7 +179,7 @@ impl Context {
             no_stdin: cfg.no_stdin,
             expect_exit_code: cfg.expect_exit_code,
 
-            runner,
+            runner: runner,
         })
     }
 
@@ -168,7 +196,7 @@ impl Context {
     }
 
     fn output(&mut self, input: &[u8], hit: bool) -> FResult<()> {
-        if self.cmd.is_some() {
+        if self.runner.is_some() {
             return Ok(());
         }
         if hit && !self.raw {
@@ -199,21 +227,15 @@ impl Context {
         }
     }
 
-    fn maybe_exec(&mut self, data: &Word) -> FResult<()> {
-        if let Some(cmd) = &self.cmd {
-            let args: Vec<String> = self
-                .cmd_args
-                .iter()
-                .map(|x| x.replace(&self.cmd_arg_target, &String::from_utf8_lossy(data)))
-                .collect();
-            let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
-
-            let (exit_code, output) = self.runner.run(self, data, cmd, &args)?;
+    fn maybe_exec(&mut self, data: &Word) -> FResult<ExitCodes> {
+        if let Some(runner) = &self.runner {
+            let (exit_code, output) = runner.run(self, data)?;
             let output = output.trim_end();
 
             if self.expect.is_none() && self.expect_len.is_none() && self.expect_exit_code.is_none()
             {
                 writeln!(self.output, "{}", style(output).white())?;
+                Ok(ExitCodes::Success)
             } else if self.maybe_compare_expected(output.as_bytes())
                 || self.maybe_compare_expected_len(output.as_bytes())
                 || (exit_code == self.expect_exit_code && self.expect_exit_code.is_some())
@@ -224,12 +246,14 @@ impl Context {
                     style("+").green(),
                     style(output).green()
                 )?;
+                Ok(ExitCodes::Success)
             } else {
                 writeln!(self.output, "{} {}", style("-").red(), style(output).red())?;
+                Ok(ExitCodes::Failure)
             }
+        } else {
+            Ok(ExitCodes::Success)
         }
-
-        Ok(())
     }
 
     fn apply_next(&mut self, input: &[u8], result: &mut Word) -> FResult<usize> {
@@ -249,10 +273,11 @@ impl Context {
         }
     }
 
-    pub fn apply(&mut self) -> FResult<()> {
+    pub fn apply(&mut self) -> FResult<ExitCodes> {
         let input = self.read_all()?;
 
         debug!("Input: {:?}", input);
+        let mut exit_code = ExitCodes::Success;
 
         for _ in 0..self.n_run {
             let mut data = &input[0..];
@@ -266,9 +291,12 @@ impl Context {
                 data = &data[read..];
             }
 
-            self.maybe_exec(&result)?;
+            let code = self.maybe_exec(&result)?;
+            if code.is_failure() {
+                exit_code = code;
+            }
         }
 
-        Ok(())
+        Ok(exit_code)
     }
 }

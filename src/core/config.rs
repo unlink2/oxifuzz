@@ -20,8 +20,9 @@ lazy_static! {
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub enum RunnerKindConfig {
-    #[default]
     Shell,
+    #[default]
+    None,
 }
 
 #[derive(Debug, Default)]
@@ -95,7 +96,7 @@ pub struct Config {
     )]
     pub no_stdin: bool,
 
-    #[cfg_attr(feature = "cli", clap(long, short, value_enum, default_value_t = RunnerKindConfig::Shell))]
+    #[cfg_attr(feature = "cli", clap(long, short, value_enum, default_value_t = RunnerKindConfig::None))]
     pub runner: RunnerKindConfig,
 
     #[cfg_attr(feature = "cli", clap(long, value_name = "SHELL"))]
