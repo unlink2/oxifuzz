@@ -97,6 +97,9 @@ pub struct Config {
     )]
     pub raw: bool,
 
+    #[cfg_attr(feature = "cli", arg(long, default_value_t = false))]
+    pub no_color: bool,
+
     #[cfg_attr(
         feature = "cli",
         arg(long, help = "Disable writing output data to child command's stdin")

@@ -32,5 +32,5 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
     let mut ctx = Context::from_cfg(cfg)?;
     Ok(ctx
         .apply(cfg.input()?.as_mut(), Some(cfg.output()?.as_mut()))?
-        .exit_code)
+        .0)
 }

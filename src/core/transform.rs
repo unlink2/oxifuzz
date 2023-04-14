@@ -174,7 +174,7 @@ impl Into<i32> for ExitCodes {
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct ExecRes {
     pub exit_code: ExitCodes,
-    pub overall_res: Word,
+    pub out: Word,
 }
 
 #[derive(Clone, Default)]
@@ -184,6 +184,7 @@ pub struct Context {
     rand: Rand,
 
     raw: bool,
+    colors_enabled: bool,
 
     expect: Option<String>,
     expect_len: Option<usize>,
@@ -210,6 +211,7 @@ impl Context {
             rand: cfg.rand(),
 
             raw: cfg.raw,
+            colors_enabled: !cfg.no_color,
 
             expect: cfg.expect.to_owned(),
             expect_len: cfg.expect_len,
@@ -217,7 +219,7 @@ impl Context {
             no_stdin: cfg.no_stdin,
             expect_exit_code: cfg.expect_exit_code,
 
-            runner: runner,
+            runner,
             collect_res: false,
         })
     }
@@ -250,6 +252,8 @@ impl Context {
         }
     }
 
+    // TODO maybe make all the write checks a single macro that either writes or
+    // does raw output
     fn maybe_exec(
         &mut self,
         output: &mut Option<&mut dyn std::io::Write>,
@@ -271,12 +275,12 @@ impl Context {
                     if !self.raw {
                         writeln!(output, "{}", style(str_output).white())?;
                     } else {
-                        output.write(&stdout_output)?;
+                        output.write_all(&stdout_output)?;
                     }
                 }
                 Ok(ExecRes {
                     exit_code: success_code,
-                    overall_res: stdout_output,
+                    out: stdout_output,
                 })
             } else if self.maybe_compare_expected(&stdout_output)
                 || self.maybe_compare_expected_len(&stdout_output)
@@ -291,12 +295,12 @@ impl Context {
                             style(str_output).green()
                         )?;
                     } else {
-                        output.write(&stdout_output)?;
+                        output.write_all(&stdout_output)?;
                     }
                 }
                 Ok(ExecRes {
                     exit_code: success_code,
-                    overall_res: stdout_output,
+                    out: stdout_output,
                 })
             } else {
                 if let Some(output) = output {
@@ -306,13 +310,13 @@ impl Context {
                 }
                 Ok(ExecRes {
                     exit_code: ExitCodes::Failure,
-                    overall_res: stdout_output,
+                    out: stdout_output,
                 })
             }
         } else {
             Ok(ExecRes {
                 exit_code: ExitCodes::Success,
-                overall_res: data.to_owned(),
+                out: data.to_owned(),
             })
         }
     }
@@ -332,11 +336,20 @@ impl Context {
         }
     }
 
+    /// This function converts the input data
+    /// into an output which is collected into a single Word
+    /// (this can be disabled in Context's settings)
+    /// It will also streams results into output if it is provided
     pub fn apply(
         &mut self,
         input: &mut dyn std::io::Read,
         mut output: Option<&mut dyn std::io::Write>,
-    ) -> FResult<ExecRes> {
+    ) -> FResult<(ExitCodes, Vec<ExecRes>)> {
+        // if colors are enabled then override the value according to cfg
+        if console::colors_enabled() {
+            console::set_colors_enabled(self.colors_enabled);
+        }
+
         let input = self.read_all(input)?;
 
         debug!("Input: {:?}", input);
@@ -355,22 +368,19 @@ impl Context {
                 data = &data[read..];
             }
 
-            let mut exec_res = self.maybe_exec(&mut output, &result)?;
+            let exec_res = self.maybe_exec(&mut output, &result)?;
             if exec_res.exit_code.is_failure() {
                 exit_code = exec_res.exit_code;
             }
 
             if self.collect_res {
-                overall_res.append(&mut exec_res.overall_res);
+                overall_res.push(exec_res);
             }
         }
 
         debug!("Exit code: {:?}. Overall res: {:?}", exit_code, overall_res);
 
-        Ok(ExecRes {
-            exit_code,
-            overall_res,
-        })
+        Ok((exit_code, overall_res))
     }
 }
 
@@ -378,11 +388,11 @@ impl Context {
 mod test {
     use crate::core::rand::Rand;
 
-    use super::{output_command_runner, Context, ExecRes, Word};
+    use super::{output_command_runner, Context, ExecRes, ExitCodes, Word};
 
     fn assert_apply(
         input: &str,
-        expected: ExecRes,
+        expected: (ExitCodes, Vec<ExecRes>),
         expected_output: Word,
         n_run: u32,
         expect: Option<String>,
@@ -391,7 +401,7 @@ mod test {
             words: vec![b"123".to_vec(), b"45".to_vec(), b"abc".to_vec()],
             target: Default::default(),
             rand: Rand::from_seed(1),
-            raw: true,
+            raw: false,
             expect,
             expect_len: None,
             expect_exit_code: None,
@@ -402,6 +412,7 @@ mod test {
                 on_run: output_command_runner,
             }),
             collect_res: true,
+            colors_enabled: false,
         };
         let mut output = vec![];
         let res = ctx
@@ -409,7 +420,6 @@ mod test {
             .unwrap();
 
         assert_eq!(expected, res);
-        println!("{}", String::from_utf8_lossy(&output));
         assert_eq!(expected_output, output);
     }
 
@@ -417,22 +427,34 @@ mod test {
     fn success() {
         assert_apply(
             "{12: OXIFUZZ}",
-            ExecRes {
-                exit_code: super::ExitCodes::Success,
-                overall_res: b"{12: abc}".to_vec(),
-            },
-            b"{12: abc}".to_vec(),
+            (
+                ExitCodes::Success,
+                vec![ExecRes {
+                    exit_code: super::ExitCodes::Success,
+                    out: b"{12: abc}".to_vec(),
+                }],
+            ),
+            b"{12: abc}\n".to_vec(),
             1,
             None,
         );
 
         assert_apply(
             "{12: OXIFUZZ}",
-            ExecRes {
-                exit_code: super::ExitCodes::Failure,
-                overall_res: b"{12: abc}{12: 45}".to_vec(),
-            },
-            b"{12: abc}".to_vec(),
+            (
+                ExitCodes::Failure,
+                vec![
+                    ExecRes {
+                        exit_code: super::ExitCodes::Success,
+                        out: b"{12: abc}".to_vec(),
+                    },
+                    ExecRes {
+                        exit_code: super::ExitCodes::Failure,
+                        out: b"{12: 45}".to_vec(),
+                    },
+                ],
+            ),
+            b"+ {12: abc}\n- {12: 45}\n".to_vec(),
             2,
             Some("{12: abc}".into()),
         );
