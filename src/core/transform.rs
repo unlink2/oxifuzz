@@ -115,8 +115,9 @@ pub fn default_command_runner(
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Default)]
 pub enum ExitCodes {
+    #[default]
     Success,
     Failure,
 }
@@ -134,6 +135,12 @@ impl Into<i32> for ExitCodes {
             ExitCodes::Failure => 1,
         }
     }
+}
+
+#[derive(Clone, Default)]
+pub struct ApplyRes {
+    pub exit_code: ExitCodes,
+    pub overall_res: Word,
 }
 
 pub struct Context {
@@ -273,11 +280,12 @@ impl Context {
         }
     }
 
-    pub fn apply(&mut self) -> FResult<ExitCodes> {
+    pub fn apply(&mut self) -> FResult<ApplyRes> {
         let input = self.read_all()?;
 
         debug!("Input: {:?}", input);
         let mut exit_code = ExitCodes::Success;
+        let mut overall_res = Vec::new();
 
         for _ in 0..self.n_run {
             let mut data = &input[0..];
@@ -295,8 +303,13 @@ impl Context {
             if code.is_failure() {
                 exit_code = code;
             }
+
+            overall_res.append(&mut result);
         }
 
-        Ok(exit_code)
+        Ok(ApplyRes {
+            exit_code,
+            overall_res,
+        })
     }
 }
