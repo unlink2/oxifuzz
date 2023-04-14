@@ -191,6 +191,9 @@ pub struct Context {
     no_stdin: bool,
 
     runner: Option<CommandRunner>,
+
+    // when set to false do not collect result into one large output string
+    collect_res: bool,
 }
 
 impl Context {
@@ -215,6 +218,7 @@ impl Context {
             expect_exit_code: cfg.expect_exit_code,
 
             runner: runner,
+            collect_res: false,
         })
     }
 
@@ -340,7 +344,9 @@ impl Context {
                 exit_code = exec_res.exit_code;
             }
 
-            overall_res.append(&mut exec_res.overall_res);
+            if self.collect_res {
+                overall_res.append(&mut exec_res.overall_res);
+            }
         }
 
         Ok(ApplyRes {
