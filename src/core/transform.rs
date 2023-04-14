@@ -152,6 +152,7 @@ pub enum ExitCodes {
     #[default]
     Success,
     Failure,
+    RunnerFailed,
 }
 
 impl ExitCodes {
@@ -165,6 +166,7 @@ impl Into<i32> for ExitCodes {
         match self {
             ExitCodes::Success => 0,
             ExitCodes::Failure => 1,
+            ExitCodes::RunnerFailed => 2,
         }
     }
 }
@@ -255,6 +257,12 @@ impl Context {
             let (exit_code, stdout_output) = runner.run(self, output, data)?;
             let str_output = String::from_utf8_lossy(&stdout_output);
 
+            let success_code = if exit_code == Some(0) || exit_code.is_none() {
+                ExitCodes::Success
+            } else {
+                ExitCodes::RunnerFailed
+            };
+
             if self.expect.is_none() && self.expect_len.is_none() && self.expect_exit_code.is_none()
             {
                 if !self.raw {
@@ -263,7 +271,7 @@ impl Context {
                     output.write(&stdout_output)?;
                 }
                 Ok(ApplyRes {
-                    exit_code: ExitCodes::Success,
+                    exit_code: success_code,
                     overall_res: stdout_output,
                 })
             } else if self.maybe_compare_expected(&stdout_output)
@@ -281,7 +289,7 @@ impl Context {
                     output.write(&stdout_output)?;
                 }
                 Ok(ApplyRes {
-                    exit_code: ExitCodes::Success,
+                    exit_code: success_code,
                     overall_res: stdout_output,
                 })
             } else {
