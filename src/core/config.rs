@@ -21,6 +21,7 @@ lazy_static! {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub enum RunnerKindConfig {
     Shell,
+    Output,
     #[default]
     None,
 }
@@ -87,7 +88,13 @@ pub struct Config {
     #[cfg_attr(feature = "cli", arg(short, long, action = clap::ArgAction::Count))]
     pub verbose: u8,
 
-    #[cfg_attr(feature = "cli", arg(long, help = "Output as bytes instead of chars"))]
+    #[cfg_attr(
+        feature = "cli",
+        arg(
+            long,
+            help = "Output as bytes instead of chars. In raw mode only outputs that match any of the --expect options will be output."
+        )
+    )]
     pub raw: bool,
 
     #[cfg_attr(
@@ -96,7 +103,7 @@ pub struct Config {
     )]
     pub no_stdin: bool,
 
-    #[cfg_attr(feature = "cli", clap(long, short, value_enum, default_value_t = RunnerKindConfig::None))]
+    #[cfg_attr(feature = "cli", clap(long, short, value_enum, default_value_t = RunnerKindConfig::Output))]
     pub runner: RunnerKindConfig,
 
     #[cfg_attr(feature = "cli", clap(long, value_name = "SHELL"))]
