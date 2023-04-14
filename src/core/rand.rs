@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use rand::prelude::*;
 
+#[derive(Clone)]
 pub enum Rand {
     Random(StdRng),
     File(PathBuf),

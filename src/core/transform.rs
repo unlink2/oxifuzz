@@ -15,6 +15,7 @@ pub type Word = Vec<u8>;
 
 pub const DEFAULT_TARGET_WORD: &str = "OXIFUZZ";
 
+#[derive(Clone)]
 pub enum Target {
     Word(Word),
 }
@@ -40,16 +41,16 @@ impl Target {
 }
 
 /// Function that runs a command and returns an exit code and the output of the command
-pub type CommandRunnerFn = fn(
-    ctx: &Context,
-    output: &mut dyn std::io::Write,
-    runner: &CommandRunnerKind,
-    data: &Word,
-) -> FResult<(Option<i32>, Word)>;
+pub type CommandRunnerFn =
+    fn(ctx: &Context, runner: &CommandRunnerKind, data: &Word) -> FResult<(Option<i32>, Word)>;
 
 #[derive(Clone)]
 pub enum CommandRunnerKind {
-    Shell { cmd: String, cmd_args: Vec<String> },
+    Shell {
+        cmd: String,
+        cmd_args: Vec<String>,
+        cmd_arg_target: String,
+    },
     Output,
     None,
 }
@@ -67,6 +68,7 @@ impl CommandRunner {
                 kind: CommandRunnerKind::Shell {
                     cmd,
                     cmd_args: cfg.cmd_args().unwrap_or(vec![]),
+                    cmd_arg_target: cfg.exec_target.to_owned(),
                 },
                 on_run: shell_command_runner,
             }))
@@ -91,19 +93,13 @@ impl CommandRunner {
         }
     }
 
-    pub fn run(
-        &self,
-        ctx: &Context,
-        output: &mut dyn std::io::Write,
-        data: &Word,
-    ) -> FResult<(Option<i32>, Word)> {
-        (self.on_run)(ctx, output, &self.kind, data)
+    pub fn run(&self, ctx: &Context, data: &Word) -> FResult<(Option<i32>, Word)> {
+        (self.on_run)(ctx, &self.kind, data)
     }
 }
 
 pub fn output_command_runner(
     _ctx: &Context,
-    _output: &mut dyn std::io::Write,
     runner: &CommandRunnerKind,
     data: &Word,
 ) -> FResult<(Option<i32>, Word)> {
@@ -116,14 +112,18 @@ pub fn output_command_runner(
 
 pub fn shell_command_runner(
     ctx: &Context,
-    _output: &mut dyn std::io::Write,
     runner: &CommandRunnerKind,
     data: &Word,
 ) -> FResult<(Option<i32>, Word)> {
-    if let CommandRunnerKind::Shell { cmd, cmd_args } = runner {
+    if let CommandRunnerKind::Shell {
+        cmd,
+        cmd_args,
+        cmd_arg_target,
+    } = runner
+    {
         let args: Vec<String> = cmd_args
             .iter()
-            .map(|x| x.replace(&ctx.cmd_arg_target, &String::from_utf8_lossy(data)))
+            .map(|x| x.replace(cmd_arg_target, &String::from_utf8_lossy(data)))
             .collect();
         let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
 
@@ -147,7 +147,7 @@ pub fn shell_command_runner(
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Copy, Clone, Eq, PartialEq, Default, Debug)]
 pub enum ExitCodes {
     #[default]
     Success,
@@ -171,16 +171,16 @@ impl Into<i32> for ExitCodes {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct ApplyRes {
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
+pub struct ExecRes {
     pub exit_code: ExitCodes,
     pub overall_res: Word,
 }
 
+#[derive(Clone, Default)]
 pub struct Context {
     words: Vec<Word>,
     target: Target,
-    cmd_arg_target: String,
     rand: Rand,
 
     raw: bool,
@@ -205,8 +205,6 @@ impl Context {
 
     pub fn from_cfg_with_runner(cfg: &Config, runner: Option<CommandRunner>) -> FResult<Self> {
         Ok(Self {
-            cmd_arg_target: cfg.exec_target.to_owned(),
-
             words: cfg.words()?,
             target: Target::Word(cfg.target.to_owned().into_bytes()),
             rand: cfg.rand(),
@@ -252,9 +250,13 @@ impl Context {
         }
     }
 
-    fn maybe_exec(&mut self, output: &mut dyn std::io::Write, data: &Word) -> FResult<ApplyRes> {
+    fn maybe_exec(
+        &mut self,
+        output: &mut Option<&mut dyn std::io::Write>,
+        data: &Word,
+    ) -> FResult<ExecRes> {
         if let Some(runner) = &self.runner {
-            let (exit_code, stdout_output) = runner.run(self, output, data)?;
+            let (exit_code, stdout_output) = runner.run(self, data)?;
             let str_output = String::from_utf8_lossy(&stdout_output);
 
             let success_code = if exit_code == Some(0) || exit_code.is_none() {
@@ -265,12 +267,14 @@ impl Context {
 
             if self.expect.is_none() && self.expect_len.is_none() && self.expect_exit_code.is_none()
             {
-                if !self.raw {
-                    writeln!(output, "{}", style(str_output).white())?;
-                } else {
-                    output.write(&stdout_output)?;
+                if let Some(output) = output {
+                    if !self.raw {
+                        writeln!(output, "{}", style(str_output).white())?;
+                    } else {
+                        output.write(&stdout_output)?;
+                    }
                 }
-                Ok(ApplyRes {
+                Ok(ExecRes {
                     exit_code: success_code,
                     overall_res: stdout_output,
                 })
@@ -278,31 +282,35 @@ impl Context {
                 || self.maybe_compare_expected_len(&stdout_output)
                 || (exit_code == self.expect_exit_code && self.expect_exit_code.is_some())
             {
-                if !self.raw {
-                    writeln!(
-                        output,
-                        "{} {}",
-                        style("+").green(),
-                        style(str_output).green()
-                    )?;
-                } else {
-                    output.write(&stdout_output)?;
+                if let Some(output) = output {
+                    if !self.raw {
+                        writeln!(
+                            output,
+                            "{} {}",
+                            style("+").green(),
+                            style(str_output).green()
+                        )?;
+                    } else {
+                        output.write(&stdout_output)?;
+                    }
                 }
-                Ok(ApplyRes {
+                Ok(ExecRes {
                     exit_code: success_code,
                     overall_res: stdout_output,
                 })
             } else {
-                if !self.raw {
-                    writeln!(output, "{} {}", style("-").red(), style(str_output).red())?;
+                if let Some(output) = output {
+                    if !self.raw {
+                        writeln!(output, "{} {}", style("-").red(), style(str_output).red())?;
+                    }
                 }
-                Ok(ApplyRes {
+                Ok(ExecRes {
                     exit_code: ExitCodes::Failure,
                     overall_res: stdout_output,
                 })
             }
         } else {
-            Ok(ApplyRes {
+            Ok(ExecRes {
                 exit_code: ExitCodes::Success,
                 overall_res: data.to_owned(),
             })
@@ -327,8 +335,8 @@ impl Context {
     pub fn apply(
         &mut self,
         input: &mut dyn std::io::Read,
-        output: &mut dyn std::io::Write,
-    ) -> FResult<ApplyRes> {
+        mut output: Option<&mut dyn std::io::Write>,
+    ) -> FResult<ExecRes> {
         let input = self.read_all(input)?;
 
         debug!("Input: {:?}", input);
@@ -347,7 +355,7 @@ impl Context {
                 data = &data[read..];
             }
 
-            let mut exec_res = self.maybe_exec(output, &result)?;
+            let mut exec_res = self.maybe_exec(&mut output, &result)?;
             if exec_res.exit_code.is_failure() {
                 exit_code = exec_res.exit_code;
             }
@@ -357,9 +365,76 @@ impl Context {
             }
         }
 
-        Ok(ApplyRes {
+        debug!("Exit code: {:?}. Overall res: {:?}", exit_code, overall_res);
+
+        Ok(ExecRes {
             exit_code,
             overall_res,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::core::rand::Rand;
+
+    use super::{output_command_runner, Context, ExecRes, Word};
+
+    fn assert_apply(
+        input: &str,
+        expected: ExecRes,
+        expected_output: Word,
+        n_run: u32,
+        expect: Option<String>,
+    ) {
+        let mut ctx = Context {
+            words: vec![b"123".to_vec(), b"45".to_vec(), b"abc".to_vec()],
+            target: Default::default(),
+            rand: Rand::from_seed(1),
+            raw: true,
+            expect,
+            expect_len: None,
+            expect_exit_code: None,
+            n_run,
+            no_stdin: false,
+            runner: Some(super::CommandRunner {
+                kind: super::CommandRunnerKind::Output,
+                on_run: output_command_runner,
+            }),
+            collect_res: true,
+        };
+        let mut output = vec![];
+        let res = ctx
+            .apply(&mut input.as_bytes().to_vec().as_slice(), Some(&mut output))
+            .unwrap();
+
+        assert_eq!(expected, res);
+        println!("{}", String::from_utf8_lossy(&output));
+        assert_eq!(expected_output, output);
+    }
+
+    #[test]
+    fn success() {
+        assert_apply(
+            "{12: OXIFUZZ}",
+            ExecRes {
+                exit_code: super::ExitCodes::Success,
+                overall_res: b"{12: abc}".to_vec(),
+            },
+            b"{12: abc}".to_vec(),
+            1,
+            None,
+        );
+
+        assert_apply(
+            "{12: OXIFUZZ}",
+            ExecRes {
+                exit_code: super::ExitCodes::Failure,
+                overall_res: b"{12: abc}{12: 45}".to_vec(),
+            },
+            b"{12: abc}".to_vec(),
+            2,
+            Some("{12: abc}".into()),
+        );
     }
 }
