@@ -44,6 +44,13 @@ impl Target {
 pub type CommandRunnerFn =
     fn(ctx: &Context, runner: &CommandRunnerKind, data: &Word) -> FResult<(Option<i32>, Word)>;
 
+pub type CommandExpectFn = fn(
+    output: &mut Option<&mut dyn std::io::Write>,
+    ctx: &Context,
+    exit_code: Option<i32>,
+    data: &Word,
+) -> FResult<ExecRes>;
+
 #[derive(Clone)]
 pub enum CommandRunnerKind {
     Shell {
@@ -59,6 +66,7 @@ pub enum CommandRunnerKind {
 pub struct CommandRunner {
     kind: CommandRunnerKind,
     on_run: CommandRunnerFn,
+    on_expect: CommandExpectFn,
 }
 
 impl CommandRunner {
@@ -71,6 +79,7 @@ impl CommandRunner {
                     cmd_arg_target: cfg.exec_target.to_owned(),
                 },
                 on_run: shell_command_runner,
+                on_expect: default_command_expect,
             }))
         } else {
             error!("Command shell runner configured without a command!");
@@ -82,6 +91,7 @@ impl CommandRunner {
         Ok(Some(Self {
             kind: CommandRunnerKind::Output,
             on_run: output_command_runner,
+            on_expect: default_command_expect,
         }))
     }
 
@@ -95,6 +105,26 @@ impl CommandRunner {
 
     pub fn run(&self, ctx: &Context, data: &Word) -> FResult<(Option<i32>, Word)> {
         (self.on_run)(ctx, &self.kind, data)
+    }
+
+    pub fn expect(
+        &self,
+        output: &mut Option<&mut dyn std::io::Write>,
+        ctx: &Context,
+        exit_code: Option<i32>,
+        data: &Word,
+    ) -> FResult<ExecRes> {
+        (self.on_expect)(output, ctx, exit_code, data)
+    }
+
+    pub fn run_and_expect(
+        &self,
+        output: &mut Option<&mut dyn std::io::Write>,
+        ctx: &Context,
+        data: &Word,
+    ) -> FResult<ExecRes> {
+        let (exit_code, data) = self.run(ctx, data)?;
+        self.expect(output, ctx, exit_code, &data)
     }
 }
 
@@ -147,6 +177,43 @@ pub fn shell_command_runner(
     }
 }
 
+pub fn default_command_expect(
+    output: &mut Option<&mut dyn std::io::Write>,
+    ctx: &Context,
+    exit_code: Option<i32>,
+    data: &Word,
+) -> FResult<ExecRes> {
+    let success_code = if exit_code == Some(0) || exit_code.is_none() {
+        ExitCodes::Success
+    } else {
+        ExitCodes::RunnerFailed
+    };
+
+    if ctx.expect.is_none() && ctx.expect_len.is_none() && ctx.expect_exit_code.is_none() {
+        ctx.output(output, data, &OutputFmt::None)?;
+        Ok(ExecRes {
+            exit_code: success_code,
+            out: data.to_owned(),
+        })
+    } else if ctx.maybe_compare_expected(&data)
+        || ctx.maybe_compare_expected_len(&data)
+        || (exit_code == ctx.expect_exit_code && ctx.expect_exit_code.is_some())
+    {
+        ctx.output(output, data, &OutputFmt::Expected)?;
+
+        Ok(ExecRes {
+            exit_code: success_code,
+            out: data.to_owned(),
+        })
+    } else {
+        ctx.output(output, data, &OutputFmt::NotExpected)?;
+        Ok(ExecRes {
+            exit_code: ExitCodes::Failure,
+            out: data.to_owned(),
+        })
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Default, Debug)]
 pub enum ExitCodes {
     #[default]
@@ -175,6 +242,12 @@ impl Into<i32> for ExitCodes {
 pub struct ExecRes {
     pub exit_code: ExitCodes,
     pub out: Word,
+}
+
+pub enum OutputFmt {
+    None,
+    Expected,
+    NotExpected,
 }
 
 #[derive(Clone, Default)]
@@ -252,67 +325,44 @@ impl Context {
         }
     }
 
-    // TODO maybe make all the write checks a single macro that either writes or
-    // does raw output
+    fn output(
+        &self,
+        output: &mut Option<&mut dyn std::io::Write>,
+        data: &Word,
+        fmt: &OutputFmt,
+    ) -> FResult<()> {
+        if let Some(output) = output {
+            let str_output = String::from_utf8_lossy(&data);
+            if self.raw {
+                match fmt {
+                    OutputFmt::NotExpected => {}
+                    _ => output.write_all(data)?,
+                }
+            } else {
+                match fmt {
+                    OutputFmt::None => writeln!(output, "{}", style(str_output).white())?,
+                    OutputFmt::Expected => writeln!(
+                        output,
+                        "{} {}",
+                        style("+").green(),
+                        style(str_output).green()
+                    )?,
+                    OutputFmt::NotExpected => {
+                        writeln!(output, "{} {}", style("-").red(), style(str_output).red())?
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn maybe_exec(
         &mut self,
         output: &mut Option<&mut dyn std::io::Write>,
         data: &Word,
     ) -> FResult<ExecRes> {
         if let Some(runner) = &self.runner {
-            let (exit_code, stdout_output) = runner.run(self, data)?;
-            let str_output = String::from_utf8_lossy(&stdout_output);
-
-            let success_code = if exit_code == Some(0) || exit_code.is_none() {
-                ExitCodes::Success
-            } else {
-                ExitCodes::RunnerFailed
-            };
-
-            if self.expect.is_none() && self.expect_len.is_none() && self.expect_exit_code.is_none()
-            {
-                if let Some(output) = output {
-                    if !self.raw {
-                        writeln!(output, "{}", style(str_output).white())?;
-                    } else {
-                        output.write_all(&stdout_output)?;
-                    }
-                }
-                Ok(ExecRes {
-                    exit_code: success_code,
-                    out: stdout_output,
-                })
-            } else if self.maybe_compare_expected(&stdout_output)
-                || self.maybe_compare_expected_len(&stdout_output)
-                || (exit_code == self.expect_exit_code && self.expect_exit_code.is_some())
-            {
-                if let Some(output) = output {
-                    if !self.raw {
-                        writeln!(
-                            output,
-                            "{} {}",
-                            style("+").green(),
-                            style(str_output).green()
-                        )?;
-                    } else {
-                        output.write_all(&stdout_output)?;
-                    }
-                }
-                Ok(ExecRes {
-                    exit_code: success_code,
-                    out: stdout_output,
-                })
-            } else {
-                if let Some(output) = output {
-                    if !self.raw {
-                        writeln!(output, "{} {}", style("-").red(), style(str_output).red())?;
-                    }
-                }
-                Ok(ExecRes {
-                    exit_code: ExitCodes::Failure,
-                    out: stdout_output,
-                })
-            }
+            runner.run_and_expect(output, self, data)
         } else {
             Ok(ExecRes {
                 exit_code: ExitCodes::Success,
@@ -386,7 +436,7 @@ impl Context {
 
 #[cfg(test)]
 mod test {
-    use crate::core::rand::Rand;
+    use crate::core::{rand::Rand, transform::default_command_expect};
 
     use super::{output_command_runner, Context, ExecRes, ExitCodes, Word};
 
@@ -410,6 +460,7 @@ mod test {
             runner: Some(super::CommandRunner {
                 kind: super::CommandRunnerKind::Output,
                 on_run: output_command_runner,
+                on_expect: default_command_expect,
             }),
             collect_res: true,
             colors_enabled: false,
