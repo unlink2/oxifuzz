@@ -109,6 +109,9 @@ pub struct Config {
     #[cfg_attr(feature = "cli", clap(long, short, value_enum, default_value_t = RunnerKindConfig::Output))]
     pub runner: RunnerKindConfig,
 
+    #[cfg_attr(feature = "cli", clap(long, help = "Disable runners"))]
+    pub dry_run: bool,
+
     #[cfg_attr(feature = "cli", clap(long, value_name = "SHELL"))]
     #[cfg(feature = "cli")]
     pub completions: Option<Shell>,

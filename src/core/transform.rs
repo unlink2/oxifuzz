@@ -155,23 +155,34 @@ pub fn shell_command_runner(
             .iter()
             .map(|x| x.replace(cmd_arg_target, &String::from_utf8_lossy(data)))
             .collect();
-        let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
 
-        let mut child = Command::new(cmd)
-            .args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()?;
+        if ctx.dry_run {
+            let mut output = Vec::new();
+            output.write_all(&cmd.as_bytes())?;
+            for arg in args {
+                output.write(b" ")?;
+                output.write(&arg.as_bytes())?;
+            }
+            Ok((None, output))
+        } else {
+            let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
 
-        if !ctx.no_stdin {
-            let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
-            child_in.write_all(data)?;
+            let mut child = Command::new(cmd)
+                .args(args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+
+            if !ctx.no_stdin {
+                let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
+                child_in.write_all(data)?;
+            }
+            let exit_code = child.wait()?;
+            let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
+            let output = std::io::read_to_string(&mut child_out)?;
+
+            Ok((exit_code.code(), output.trim_end().into()))
         }
-        let exit_code = child.wait()?;
-        let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
-        let output = std::io::read_to_string(&mut child_out)?;
-
-        Ok((exit_code.code(), output.trim_end().into()))
     } else {
         Err(Error::UnsupportedCommandRunner)
     }
@@ -272,6 +283,8 @@ pub struct Context {
 
     // when set to false do not collect result into one large output string
     collect_res: bool,
+
+    dry_run: bool,
 }
 
 impl Context {
@@ -296,6 +309,7 @@ impl Context {
 
             runner,
             collect_res: false,
+            dry_run: cfg.dry_run,
         })
     }
 
