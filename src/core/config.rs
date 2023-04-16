@@ -145,7 +145,7 @@ impl Config {
         if let Some(seed) = self.seed {
             Rand::from_seed(seed)
         } else if let Some(path) = &self.random_file {
-            Rand::File(path.to_owned())
+            Rand::from_path(path)
         } else {
             Rand::default()
         }

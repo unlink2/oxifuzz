@@ -165,7 +165,7 @@ pub fn shell_command_runner(
 
         if !ctx.no_stdin {
             let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
-            child_in.write_all(&data)?;
+            child_in.write_all(data)?;
         }
         let exit_code = child.wait()?;
         let mut child_out = BufReader::new(child.stdout.as_mut().unwrap());
@@ -195,8 +195,8 @@ pub fn default_command_expect(
             exit_code: success_code,
             out: data.to_owned(),
         })
-    } else if ctx.maybe_compare_expected(&data)
-        || ctx.maybe_compare_expected_len(&data)
+    } else if ctx.maybe_compare_expected(data)
+        || ctx.maybe_compare_expected_len(data)
         || (exit_code == ctx.expect_exit_code && ctx.expect_exit_code.is_some())
     {
         ctx.output(output, data, &OutputFmt::Expected)?;
@@ -220,6 +220,7 @@ pub enum ExitCodes {
     Success,
     Failure,
     RunnerFailed,
+    Unknown,
 }
 
 impl ExitCodes {
@@ -228,12 +229,13 @@ impl ExitCodes {
     }
 }
 
-impl Into<i32> for ExitCodes {
-    fn into(self) -> i32 {
-        match self {
+impl From<ExitCodes> for i32 {
+    fn from(value: ExitCodes) -> Self {
+        match value {
             ExitCodes::Success => 0,
             ExitCodes::Failure => 1,
             ExitCodes::RunnerFailed => 2,
+            ExitCodes::Unknown => -1,
         }
     }
 }
@@ -297,10 +299,10 @@ impl Context {
         })
     }
 
-    fn select_word(&mut self) -> &Word {
-        let index = self.rand.next_range(0, self.words.len() as u64);
+    fn select_word(&mut self) -> FResult<&Word> {
+        let index = self.rand.next_range(0, self.words.len() as u64)?;
 
-        &self.words[index as usize]
+        Ok(&self.words[(index as usize).min(self.words.len() - 1)])
     }
 
     fn read_all(&self, input: &mut dyn std::io::Read) -> FResult<Vec<u8>> {
@@ -332,7 +334,7 @@ impl Context {
         fmt: &OutputFmt,
     ) -> FResult<()> {
         if let Some(output) = output {
-            let str_output = String::from_utf8_lossy(&data);
+            let str_output = String::from_utf8_lossy(data);
             if self.raw {
                 match fmt {
                     OutputFmt::NotExpected => {}
@@ -375,9 +377,8 @@ impl Context {
         if input.is_empty() {
             Ok(0)
         } else if self.target.should_replace(input) {
-            // FIXME do not clone word...
-            let word = &self.select_word().to_owned();
-            result.extend_from_slice(&word);
+            let word = &self.select_word()?;
+            result.extend_from_slice(word);
             Ok(self.target.len())
         } else {
             let d = &input[0..1];
