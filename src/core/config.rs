@@ -181,29 +181,33 @@ impl Config {
     }
 
     // returns the command as well as args
-    pub fn cmd(&self) -> Option<String> {
+    pub fn cmd(&self) -> FResult<Option<String>> {
         if let Some(exec) = &self.exec {
-            let mut split = exec.split_whitespace();
-            let command = split.next().unwrap_or("").to_owned();
+            let split = shell_words::split(exec).map_err(|_| crate::prelude::Error::ArgError)?;
+            let command = split.first().as_deref().unwrap_or(&"".into()).to_owned();
 
             debug!("Command {:?}", command);
 
-            Some(command)
+            Ok(Some(command))
         } else {
-            None
+            Ok(None)
         }
     }
 
-    pub fn cmd_args(&self) -> Option<Vec<String>> {
+    pub fn cmd_args(&self) -> FResult<Option<Vec<String>>> {
         if let Some(exec) = &self.exec {
-            let split = exec.split_whitespace().skip(1);
-            let args = split.map(|x| x.to_owned()).collect();
+            let mut split =
+                shell_words::split(exec).map_err(|_| crate::prelude::Error::ArgError)?;
+            if !split.is_empty() {
+                split.remove(0);
+            }
+            let args = split;
 
             debug!("Args {:?}", args);
 
-            Some(args)
+            Ok(Some(args))
         } else {
-            None
+            Ok(None)
         }
     }
 }

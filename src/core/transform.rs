@@ -71,11 +71,11 @@ pub struct CommandRunner {
 
 impl CommandRunner {
     pub fn shell_runner(cfg: &Config) -> FResult<Option<Self>> {
-        if let Some(cmd) = cfg.cmd() {
+        if let Some(cmd) = cfg.cmd()? {
             Ok(Some(Self {
                 kind: CommandRunnerKind::Shell {
                     cmd,
-                    cmd_args: cfg.cmd_args().unwrap_or(vec![]),
+                    cmd_args: cfg.cmd_args()?.unwrap_or(vec![]),
                     cmd_arg_target: cfg.exec_target.to_owned(),
                 },
                 on_run: shell_command_runner,
@@ -479,6 +479,7 @@ mod test {
             }),
             collect_res: true,
             colors_enabled: false,
+            dry_run: false,
         };
         let mut output = vec![];
         let res = ctx

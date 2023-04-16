@@ -12,6 +12,8 @@ pub enum Error {
     UnsupportedCommandRunner,
     #[error("Runner configuration is missing required options")]
     InsufficientRunnerConfiguration,
+    #[error("Argument format error")]
+    ArgError,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error(transparent)]
