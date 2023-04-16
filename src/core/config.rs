@@ -184,7 +184,7 @@ impl Config {
     pub fn cmd(&self) -> FResult<Option<String>> {
         if let Some(exec) = &self.exec {
             let split = shell_words::split(exec).map_err(|_| crate::prelude::Error::ArgError)?;
-            let command = split.first().as_deref().unwrap_or(&"".into()).to_owned();
+            let command = split.first().unwrap_or(&"".into()).to_owned();
 
             debug!("Command {:?}", command);
 

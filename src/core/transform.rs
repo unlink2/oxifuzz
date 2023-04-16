@@ -158,10 +158,10 @@ pub fn shell_command_runner(
 
         if ctx.dry_run {
             let mut output = Vec::new();
-            output.write_all(&cmd.as_bytes())?;
+            output.write_all(cmd.as_bytes())?;
             for arg in args {
-                output.write(b" ")?;
-                output.write(&arg.as_bytes())?;
+                output.write_all(b" ")?;
+                output.write_all(arg.as_bytes())?;
             }
             Ok((None, output))
         } else {
