@@ -46,6 +46,9 @@ pub struct Config {
     )]
     pub expect: Option<String>,
 
+    #[cfg_attr(feature = "cli", clap(long, help = "Apply a regex to the result"))]
+    pub expect_regex: Option<String>,
+
     #[cfg_attr(feature = "cli", clap(long, help = "Expected command lenght"))]
     pub expect_len: Option<usize>,
     #[cfg_attr(feature = "cli", clap(long, help = "Expected exit code"))]

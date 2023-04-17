@@ -200,7 +200,11 @@ pub fn default_command_expect(
         ExitCodes::RunnerFailed
     };
 
-    if ctx.expect.is_none() && ctx.expect_len.is_none() && ctx.expect_exit_code.is_none() {
+    if ctx.expect.is_none()
+        && ctx.expect_len.is_none()
+        && ctx.expect_exit_code.is_none()
+        && ctx.expect_regex.is_none()
+    {
         ctx.output(output, data, &OutputFmt::None)?;
         Ok(ExecRes {
             exit_code: success_code,
@@ -208,6 +212,7 @@ pub fn default_command_expect(
         })
     } else if ctx.maybe_compare_expected(data)
         || ctx.maybe_compare_expected_len(data)
+        || ctx.maybe_compare_regex(data)
         || (exit_code == ctx.expect_exit_code && ctx.expect_exit_code.is_some())
     {
         ctx.output(output, data, &OutputFmt::Expected)?;
@@ -273,6 +278,7 @@ pub struct Context {
     colors_enabled: bool,
 
     expect: Option<String>,
+    expect_regex: Option<regex::Regex>,
     expect_len: Option<usize>,
     expect_exit_code: Option<i32>,
 
@@ -303,6 +309,12 @@ impl Context {
 
             expect: cfg.expect.to_owned(),
             expect_len: cfg.expect_len,
+            expect_regex: if let Some(re) = &cfg.expect_regex {
+                Some(regex::Regex::new(re).map_err(|_| Error::InvalidRegex)?)
+            } else {
+                None
+            },
+
             n_run: cfg.n_run,
             no_stdin: cfg.no_stdin,
             expect_exit_code: cfg.expect_exit_code,
@@ -336,6 +348,15 @@ impl Context {
     fn maybe_compare_expected_len(&self, cmd_output: &[u8]) -> bool {
         if let Some(len) = self.expect_len {
             len == cmd_output.len()
+        } else {
+            false
+        }
+    }
+
+    fn maybe_compare_regex(&self, cmd_output: &[u8]) -> bool {
+        if let Some(re) = &self.expect_regex {
+            let utf8 = String::from_utf8_lossy(cmd_output);
+            re.is_match(&utf8)
         } else {
             false
         }
@@ -470,6 +491,7 @@ mod test {
             expect,
             expect_len: None,
             expect_exit_code: None,
+            expect_regex: None,
             n_run,
             no_stdin: false,
             runner: Some(super::CommandRunner {

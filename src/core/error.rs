@@ -14,6 +14,8 @@ pub enum Error {
     InsufficientRunnerConfiguration,
     #[error("Argument format error")]
     ArgError,
+    #[error("Invalid regex")]
+    InvalidRegex,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error(transparent)]
