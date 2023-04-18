@@ -44,7 +44,7 @@ pub struct Config {
             help = "Look for this specific output and notify the user when found"
         )
     )]
-    pub expect: Option<String>,
+    pub expect: Option<Word>,
 
     #[cfg_attr(feature = "cli", clap(long, help = "Apply a regex to the result"))]
     pub expect_regex: Option<String>,

@@ -277,7 +277,7 @@ pub struct Context {
     raw: bool,
     colors_enabled: bool,
 
-    expect: Option<String>,
+    expect: Option<Word>,
     expect_regex: Option<regex::Regex>,
     expect_len: Option<usize>,
     expect_exit_code: Option<i32>,
@@ -339,7 +339,7 @@ impl Context {
 
     fn maybe_compare_expected(&self, cmd_output: &[u8]) -> bool {
         if let Some(expect) = &self.expect {
-            cmd_output == expect.as_bytes()
+            cmd_output == expect
         } else {
             false
         }
@@ -481,7 +481,7 @@ mod test {
         expected: (ExitCodes, Vec<ExecRes>),
         expected_output: Word,
         n_run: u32,
-        expect: Option<String>,
+        expect: Option<Word>,
     ) {
         let mut ctx = Context {
             words: vec![b"123".to_vec(), b"45".to_vec(), b"abc".to_vec()],
