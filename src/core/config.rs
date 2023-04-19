@@ -46,6 +46,12 @@ pub struct Config {
     )]
     pub expect: Option<Word>,
 
+    #[cfg_attr(
+        feature = "cli",
+        clap(long, help = "Check if output contains this sequence")
+    )]
+    pub contains: Option<Word>,
+
     #[cfg_attr(feature = "cli", clap(long, help = "Apply a regex to the result"))]
     pub expect_regex: Option<String>,
 

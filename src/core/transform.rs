@@ -204,6 +204,7 @@ pub fn default_command_expect(
         && ctx.expect_len.is_none()
         && ctx.expect_exit_code.is_none()
         && ctx.expect_regex.is_none()
+        && ctx.contains.is_none()
     {
         ctx.output(output, data, &OutputFmt::None)?;
         Ok(ExecRes {
@@ -213,6 +214,7 @@ pub fn default_command_expect(
     } else if ctx.maybe_compare_expected(data)
         || ctx.maybe_compare_expected_len(data)
         || ctx.maybe_compare_regex(data)
+        || ctx.maybe_contains(data)
         || (exit_code == ctx.expect_exit_code && ctx.expect_exit_code.is_some())
     {
         ctx.output(output, data, &OutputFmt::Expected)?;
@@ -278,6 +280,7 @@ pub struct Context {
     colors_enabled: bool,
 
     expect: Option<Word>,
+    contains: Option<Word>,
     expect_regex: Option<regex::Regex>,
     expect_len: Option<usize>,
     expect_exit_code: Option<i32>,
@@ -314,6 +317,7 @@ impl Context {
             } else {
                 None
             },
+            contains: cfg.contains.to_owned(),
 
             n_run: cfg.n_run,
             no_stdin: cfg.no_stdin,
@@ -340,6 +344,19 @@ impl Context {
     fn maybe_compare_expected(&self, cmd_output: &[u8]) -> bool {
         if let Some(expect) = &self.expect {
             cmd_output == expect
+        } else {
+            false
+        }
+    }
+
+    fn maybe_contains(&self, cmd_output: &[u8]) -> bool {
+        if let Some(contains) = &self.contains {
+            for window in cmd_output.windows(contains.len()) {
+                if contains == window {
+                    return true;
+                }
+            }
+            false
         } else {
             false
         }
@@ -489,6 +506,7 @@ mod test {
             rand: Rand::from_seed(1),
             raw: false,
             expect,
+            contains: None,
             expect_len: None,
             expect_exit_code: None,
             expect_regex: None,
