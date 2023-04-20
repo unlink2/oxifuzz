@@ -200,23 +200,13 @@ pub fn default_command_expect(
         ExitCodes::RunnerFailed
     };
 
-    if ctx.expect.is_none()
-        && ctx.expect_len.is_none()
-        && ctx.expect_exit_code.is_none()
-        && ctx.expect_regex.is_none()
-        && ctx.contains.is_none()
-    {
+    if ctx.expect.is_empty() {
         ctx.output(output, data, &OutputFmt::None)?;
         Ok(ExecRes {
             exit_code: success_code,
             out: data.to_owned(),
         })
-    } else if ctx.maybe_compare_expected(data)
-        || ctx.maybe_compare_expected_len(data)
-        || ctx.maybe_compare_regex(data)
-        || ctx.maybe_contains(data)
-        || (exit_code == ctx.expect_exit_code && ctx.expect_exit_code.is_some())
-    {
+    } else if ctx.compare_expected(data, exit_code) {
         ctx.output(output, data, &OutputFmt::Expected)?;
 
         Ok(ExecRes {
@@ -279,11 +269,7 @@ pub struct Context {
     raw: bool,
     colors_enabled: bool,
 
-    expect: Option<Word>,
-    contains: Option<Word>,
-    expect_regex: Option<regex::Regex>,
-    expect_len: Option<usize>,
-    expect_exit_code: Option<i32>,
+    expect: Vec<Expect>,
 
     n_run: u32,
     no_stdin: bool,
@@ -310,18 +296,10 @@ impl Context {
             raw: cfg.raw,
             colors_enabled: !cfg.no_color,
 
-            expect: cfg.expect.to_owned(),
-            expect_len: cfg.expect_len,
-            expect_regex: if let Some(re) = &cfg.expect_regex {
-                Some(regex::Regex::new(re).map_err(|_| Error::InvalidRegex)?)
-            } else {
-                None
-            },
-            contains: cfg.contains.to_owned(),
+            expect: Expect::from_cfg(cfg)?,
 
             n_run: cfg.n_run,
             no_stdin: cfg.no_stdin,
-            expect_exit_code: cfg.expect_exit_code,
 
             runner,
             collect_res: false,
@@ -341,42 +319,13 @@ impl Context {
         Ok(buf)
     }
 
-    fn maybe_compare_expected(&self, cmd_output: &[u8]) -> bool {
-        if let Some(expect) = &self.expect {
-            cmd_output == expect
-        } else {
-            false
-        }
-    }
-
-    fn maybe_contains(&self, cmd_output: &[u8]) -> bool {
-        if let Some(contains) = &self.contains {
-            for window in cmd_output.windows(contains.len()) {
-                if contains == window {
-                    return true;
-                }
+    fn compare_expected(&self, data: &Word, exit_code: Option<i32>) -> bool {
+        for e in self.expect.iter() {
+            if e.expect(data, exit_code) {
+                return true;
             }
-            false
-        } else {
-            false
         }
-    }
-
-    fn maybe_compare_expected_len(&self, cmd_output: &[u8]) -> bool {
-        if let Some(len) = self.expect_len {
-            len == cmd_output.len()
-        } else {
-            false
-        }
-    }
-
-    fn maybe_compare_regex(&self, cmd_output: &[u8]) -> bool {
-        if let Some(re) = &self.expect_regex {
-            let utf8 = String::from_utf8_lossy(cmd_output);
-            re.is_match(&utf8)
-        } else {
-            false
-        }
+        false
     }
 
     fn output(
@@ -487,9 +436,66 @@ impl Context {
     }
 }
 
+#[derive(Clone)]
+pub enum Expect {
+    Contains(Word),
+    Regex(regex::Regex),
+    Equals(Word),
+    ExitCode(Option<i32>),
+    Len(usize),
+}
+
+impl Expect {
+    pub fn from_cfg(cfg: &Config) -> FResult<Vec<Self>> {
+        let mut expects = Vec::default();
+
+        for expect in cfg.expect.iter() {
+            expects.push(Self::Equals(expect.to_owned()));
+        }
+        for len in cfg.expect_len.iter() {
+            expects.push(Self::Len(*len));
+        }
+        for ex in cfg.expect_exit_code.iter() {
+            expects.push(Self::ExitCode(Some(*ex)));
+        }
+        for re in cfg.expect_regex.iter() {
+            expects.push(Self::Regex(
+                regex::Regex::new(re).map_err(|_| Error::InvalidRegex)?,
+            ));
+        }
+        for contains in cfg.contains.iter() {
+            expects.push(Self::Contains(contains.to_owned()));
+        }
+        Ok(expects)
+    }
+
+    pub fn expect(&self, data: &Word, exit_code: Option<i32>) -> bool {
+        match self {
+            Expect::Contains(contains) => {
+                for window in data.windows(contains.len()) {
+                    if contains == window {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expect::Regex(re) => {
+                let utf8 = String::from_utf8_lossy(data);
+                re.is_match(&utf8)
+            }
+            Expect::Equals(expected) => expected == data,
+            Expect::ExitCode(expected) => &exit_code == expected,
+            Expect::Len(len) => data.len() == *len,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::core::{rand::Rand, transform::default_command_expect};
+    use crate::core::{
+        rand::Rand,
+        transform::{default_command_expect, Expect},
+    };
 
     use super::{output_command_runner, Context, ExecRes, ExitCodes, Word};
 
@@ -505,11 +511,11 @@ mod test {
             target: Default::default(),
             rand: Rand::from_seed(1),
             raw: false,
-            expect,
-            contains: None,
-            expect_len: None,
-            expect_exit_code: None,
-            expect_regex: None,
+            expect: if let Some(expect) = expect {
+                vec![Expect::Equals(expect.to_owned())]
+            } else {
+                vec![]
+            },
             n_run,
             no_stdin: false,
             runner: Some(super::CommandRunner {

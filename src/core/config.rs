@@ -44,21 +44,21 @@ pub struct Config {
             help = "Look for this specific output and notify the user when found"
         )
     )]
-    pub expect: Option<Word>,
+    pub expect: Vec<Word>,
 
     #[cfg_attr(
         feature = "cli",
         clap(long, help = "Check if output contains this sequence")
     )]
-    pub contains: Option<Word>,
+    pub contains: Vec<Word>,
 
     #[cfg_attr(feature = "cli", clap(long, help = "Apply a regex to the result"))]
-    pub expect_regex: Option<String>,
+    pub expect_regex: Vec<String>,
 
     #[cfg_attr(feature = "cli", clap(long, help = "Expected command lenght"))]
-    pub expect_len: Option<usize>,
+    pub expect_len: Vec<usize>,
     #[cfg_attr(feature = "cli", clap(long, help = "Expected exit code"))]
-    pub expect_exit_code: Option<i32>,
+    pub expect_exit_code: Vec<i32>,
 
     #[cfg_attr(feature = "cli", clap(long, help = "Replace target for command args",
         default_value =crate::core::transform::DEFAULT_TARGET_WORD))]
