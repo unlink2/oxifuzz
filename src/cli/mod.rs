@@ -1,7 +1,7 @@
 use crate::core::{
     config::{generate_completion, Config},
     error::FResult,
-    transform::{Context, ExitCodes},
+    transform::{Context, ContextIter, ExitCodes},
 };
 
 use log::LevelFilter;
@@ -29,8 +29,16 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
         std::process::exit(0);
     }
 
-    let mut ctx = Context::from_cfg(cfg)?;
-    Ok(ctx
-        .apply(cfg.input()?.as_mut(), Some(cfg.output()?.as_mut()))?
-        .0)
+    let mut output = cfg.output()?;
+    let mut overall_exit_code = ExitCodes::Success;
+    let mut ctx = ContextIter::from_cfg(cfg)?;
+
+    ctx.try_for_each(|x| {
+        let x = x?;
+        if x.exit_code.is_failure() {
+            overall_exit_code = x.exit_code;
+        }
+        Context::output(&cfg, &mut output, &x.out, &x.fmt)
+    })?;
+    Ok(overall_exit_code)
 }
