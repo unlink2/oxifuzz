@@ -38,7 +38,7 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
         if x.exit_code.is_failure() {
             overall_exit_code = x.exit_code;
         }
-        Context::output(&cfg, &mut output, &x.out, &x.fmt)
+        Context::output(cfg, &mut output, &x.out, &x.fmt)
     })?;
     Ok(overall_exit_code)
 }
