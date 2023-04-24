@@ -34,6 +34,9 @@ pub struct Config {
 
     pub output: Option<PathBuf>,
 
+    #[arg(last = true)]
+    pub escaped_words: Vec<Word>,
+
     #[cfg_attr(feature = "cli", clap(long, help = "Run command for each output"))]
     pub exec: Option<String>,
 
@@ -165,6 +168,10 @@ impl Config {
 
     pub fn words(&self) -> FResult<Vec<Word>> {
         let mut res: Vec<Word> = self.word.iter().map(|x| x.clone().into_bytes()).collect();
+
+        for word in &self.escaped_words {
+            res.push(word.to_owned());
+        }
 
         for path in &self.word_list {
             let all = std::fs::read_to_string(path)?;
