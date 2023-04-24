@@ -22,6 +22,7 @@ lazy_static! {
 pub enum RunnerKindConfig {
     Shell,
     Output,
+    Http,
     #[default]
     None,
 }
@@ -66,6 +67,12 @@ pub struct Config {
     #[cfg_attr(feature = "cli", clap(long, help = "Replace target for command args",
         default_value =crate::core::transform::DEFAULT_TARGET_WORD))]
     pub exec_target: String,
+
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub url: Option<String>,
+
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub header: Vec<String>,
 
     #[cfg_attr(feature = "cli", clap(long, short, 
         help="The target substring that will be replaced with words. 

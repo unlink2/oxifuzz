@@ -22,4 +22,6 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     ExitStatus(#[from] ExitStatusError),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
 }

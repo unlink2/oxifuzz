@@ -54,6 +54,11 @@ pub enum CommandRunnerKind {
         cmd_args: Vec<String>,
         cmd_arg_target: String,
     },
+    Http {
+        url: String,
+        headers: Vec<String>,
+        cmd_arg_target: String,
+    },
     Output,
     None,
 }
@@ -91,9 +96,28 @@ impl CommandRunner {
         }))
     }
 
+    pub fn http_runner(cfg: &Config) -> FResult<Option<Self>> {
+        if let Some(url) = &cfg.url {
+            Ok(Some(Self {
+                kind: CommandRunnerKind::Http {
+                    url: url.to_owned(),
+                    headers: cfg.header.to_owned(),
+                    cmd_arg_target: cfg.exec_target.to_owned(),
+                },
+                on_run: http_command_runner,
+                on_expect: default_command_expect,
+            }))
+        } else {
+            error!("Command url runner configured without an url!");
+            Err(Error::InsufficientRunnerConfiguration)
+        }
+    }
+
     fn auto_select_runner(cfg: &Config) -> FResult<Option<Self>> {
         if cfg.exec.is_some() {
             Self::shell_runner(cfg)
+        } else if cfg.url.is_some() {
+            Self::http_runner(cfg)
         } else {
             Self::output_runner(cfg)
         }
@@ -104,6 +128,7 @@ impl CommandRunner {
             super::config::RunnerKindConfig::Shell => Self::shell_runner(cfg),
             super::config::RunnerKindConfig::None => Self::auto_select_runner(cfg),
             super::config::RunnerKindConfig::Output => Self::output_runner(cfg),
+            super::config::RunnerKindConfig::Http => todo!(),
         }
     }
 
@@ -176,6 +201,29 @@ pub fn shell_command_runner(
 
             Ok((exit_code.code(), output.trim_end().into()))
         }
+    } else {
+        Err(Error::UnsupportedCommandRunner)
+    }
+}
+
+pub fn http_command_runner(
+    ctx: &Context,
+    runner: &CommandRunnerKind,
+    data: &Word,
+) -> FResult<(Option<i32>, Word)> {
+    if let CommandRunnerKind::Http {
+        url,
+        headers,
+        cmd_arg_target,
+    } = runner
+    {
+        // TODO add body, headers and implement other methods
+        //      body should just be stdin input as with commands
+        // TODO implement fuzzer insertion into url
+        let resp = reqwest::blocking::get(url)?;
+        let status = resp.status();
+        let body = resp.bytes()?.to_vec();
+        Ok((Some(status.as_u16().into()), body))
     } else {
         Err(Error::UnsupportedCommandRunner)
     }
