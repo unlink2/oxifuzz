@@ -142,7 +142,11 @@ impl Config {
 
     pub fn input(&self) -> FResult<Box<dyn Read>> {
         Ok(if let Some(path) = &self.input {
-            Box::new(BufReader::new(std::fs::File::open(path)?))
+            if path.to_str().unwrap_or("") == "-" {
+                Box::new(BufReader::new(std::io::stdin()))
+            } else {
+                Box::new(BufReader::new(std::fs::File::open(path)?))
+            }
         } else {
             Box::new(BufReader::new(std::io::stdin()))
         })
@@ -150,7 +154,11 @@ impl Config {
 
     pub fn output(&self) -> FResult<Box<dyn Write>> {
         Ok(if let Some(path) = &self.output {
-            Box::new(LineWriter::new(std::fs::File::create(path)?))
+            if path.to_str().unwrap_or("") == "-" {
+                Box::new(LineWriter::new(std::io::stdout().lock()))
+            } else {
+                Box::new(LineWriter::new(std::fs::File::create(path)?))
+            }
         } else {
             Box::new(LineWriter::new(std::io::stdout().lock()))
         })
