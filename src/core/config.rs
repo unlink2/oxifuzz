@@ -118,7 +118,7 @@ pub struct Config {
     )]
     pub no_stdin: bool,
 
-    #[cfg_attr(feature = "cli", clap(long, short, value_enum, default_value_t = RunnerKindConfig::Output))]
+    #[cfg_attr(feature = "cli", clap(long, short, value_enum, default_value_t = RunnerKindConfig::None))]
     pub runner: RunnerKindConfig,
 
     #[cfg_attr(feature = "cli", clap(long, help = "Disable runners"))]

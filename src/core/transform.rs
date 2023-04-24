@@ -91,10 +91,18 @@ impl CommandRunner {
         }))
     }
 
+    fn auto_select_runner(cfg: &Config) -> FResult<Option<Self>> {
+        if cfg.exec.is_some() {
+            Self::shell_runner(cfg)
+        } else {
+            Self::output_runner(cfg)
+        }
+    }
+
     pub fn from_cfg(cfg: &Config) -> FResult<Option<Self>> {
         match cfg.runner {
             super::config::RunnerKindConfig::Shell => Self::shell_runner(cfg),
-            super::config::RunnerKindConfig::None => Ok(None),
+            super::config::RunnerKindConfig::None => Self::auto_select_runner(cfg),
             super::config::RunnerKindConfig::Output => Self::output_runner(cfg),
         }
     }
