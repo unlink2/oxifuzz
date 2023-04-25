@@ -189,8 +189,8 @@ pub fn shell_command_runner(
     {
         let args: Vec<String> = cmd_args
             .iter()
-            .map(|x| replace_fuzz(x, cmd_arg_target, ctx, rand).unwrap())
-            .collect();
+            .map(|x| replace_fuzz(x, cmd_arg_target, ctx, rand))
+            .try_collect()?;
 
         if ctx.dry_run {
             let mut output = Vec::new();
@@ -199,6 +199,7 @@ pub fn shell_command_runner(
                 output.write_all(b" ")?;
                 output.write_all(arg.as_bytes())?;
             }
+            output.write_all(data)?;
             Ok((None, output))
         } else {
             let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
@@ -238,12 +239,16 @@ pub fn http_command_runner(
     {
         let url = replace_fuzz(url, cmd_arg_target, ctx, rand)?;
         if ctx.dry_run {
-            Ok((None, url.as_bytes().to_owned()))
+            let mut output = Vec::new();
+            output.write_all(url.as_bytes())?;
+            output.write_all(data)?;
+            Ok((None, output))
         } else {
             // TODO add body, headers and implement other methods
             //      body should just be stdin input as with commands
             // TODO implement fuzzer insertion into url
-            let resp = reqwest::blocking::get(url)?;
+            let client = reqwest::blocking::Client::new();
+            let resp = client.get(url).body(data.to_owned()).send()?;
             let status = resp.status();
             let body = resp.bytes()?.to_vec();
             Ok((Some(status.as_u16().into()), body))
