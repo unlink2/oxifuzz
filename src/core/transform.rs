@@ -146,6 +146,10 @@ impl CommandRunner {
     }
 }
 
+fn replace_fuzz(x: &str, cmd_arg_target: &str, data: &Word) -> String {
+    x.replace(cmd_arg_target, &String::from_utf8_lossy(data))
+}
+
 pub fn output_command_runner(
     _ctx: &Context,
     runner: &CommandRunnerKind,
@@ -171,7 +175,7 @@ pub fn shell_command_runner(
     {
         let args: Vec<String> = cmd_args
             .iter()
-            .map(|x| x.replace(cmd_arg_target, &String::from_utf8_lossy(data)))
+            .map(|x| replace_fuzz(x, cmd_arg_target, data))
             .collect();
 
         if ctx.dry_run {
@@ -217,13 +221,18 @@ pub fn http_command_runner(
         cmd_arg_target,
     } = runner
     {
-        // TODO add body, headers and implement other methods
-        //      body should just be stdin input as with commands
-        // TODO implement fuzzer insertion into url
-        let resp = reqwest::blocking::get(url)?;
-        let status = resp.status();
-        let body = resp.bytes()?.to_vec();
-        Ok((Some(status.as_u16().into()), body))
+        let url = replace_fuzz(url, cmd_arg_target, data);
+        if ctx.dry_run {
+            Ok((None, url.as_bytes().to_owned()))
+        } else {
+            // TODO add body, headers and implement other methods
+            //      body should just be stdin input as with commands
+            // TODO implement fuzzer insertion into url
+            let resp = reqwest::blocking::get(url)?;
+            let status = resp.status();
+            let body = resp.bytes()?.to_vec();
+            Ok((Some(status.as_u16().into()), body))
+        }
     } else {
         Err(Error::UnsupportedCommandRunner)
     }
