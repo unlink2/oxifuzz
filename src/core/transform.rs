@@ -41,8 +41,12 @@ impl Target {
 }
 
 /// Function that runs a command and returns an exit code and the output of the command
-pub type CommandRunnerFn =
-    fn(ctx: &Context, runner: &CommandRunnerKind, data: &Word) -> FResult<(Option<i32>, Word)>;
+pub type CommandRunnerFn = fn(
+    ctx: &Context,
+    runner: &CommandRunnerKind,
+    data: &Word,
+    rand: &mut Rand,
+) -> FResult<(Option<i32>, Word)>;
 
 pub type CommandExpectFn =
     fn(ctx: &Context, exit_code: Option<i32>, data: &Word) -> FResult<ExecRes>;
@@ -132,28 +136,37 @@ impl CommandRunner {
         }
     }
 
-    pub fn run(&self, ctx: &Context, data: &Word) -> FResult<(Option<i32>, Word)> {
-        (self.on_run)(ctx, &self.kind, data)
+    pub fn run(&self, ctx: &Context, data: &Word, rand: &mut Rand) -> FResult<(Option<i32>, Word)> {
+        (self.on_run)(ctx, &self.kind, data, rand)
     }
 
     pub fn expect(&self, ctx: &Context, exit_code: Option<i32>, data: &Word) -> FResult<ExecRes> {
         (self.on_expect)(ctx, exit_code, data)
     }
 
-    pub fn run_and_expect(&self, ctx: &Context, data: &Word) -> FResult<ExecRes> {
-        let (exit_code, data) = self.run(ctx, data)?;
+    pub fn run_and_expect(&self, ctx: &Context, data: &Word, rand: &mut Rand) -> FResult<ExecRes> {
+        let (exit_code, data) = self.run(ctx, data, rand)?;
         self.expect(ctx, exit_code, &data)
     }
 }
 
-fn replace_fuzz(x: &str, cmd_arg_target: &str, data: &Word) -> String {
-    x.replace(cmd_arg_target, &String::from_utf8_lossy(data))
+fn replace_fuzz(x: &str, cmd_arg_target: &str, ctx: &Context, rand: &mut Rand) -> FResult<String> {
+    let mut x = x.to_owned();
+    while x.contains(cmd_arg_target) {
+        x = x.replacen(
+            cmd_arg_target,
+            &String::from_utf8_lossy(ctx.select_word(rand)?),
+            1,
+        );
+    }
+    Ok(x)
 }
 
 pub fn output_command_runner(
     _ctx: &Context,
     runner: &CommandRunnerKind,
     data: &Word,
+    _rand: &mut Rand,
 ) -> FResult<(Option<i32>, Word)> {
     if let CommandRunnerKind::Output = runner {
         Ok((None, data.to_owned()))
@@ -166,6 +179,7 @@ pub fn shell_command_runner(
     ctx: &Context,
     runner: &CommandRunnerKind,
     data: &Word,
+    rand: &mut Rand,
 ) -> FResult<(Option<i32>, Word)> {
     if let CommandRunnerKind::Shell {
         cmd,
@@ -175,7 +189,7 @@ pub fn shell_command_runner(
     {
         let args: Vec<String> = cmd_args
             .iter()
-            .map(|x| replace_fuzz(x, cmd_arg_target, data))
+            .map(|x| replace_fuzz(x, cmd_arg_target, ctx, rand).unwrap())
             .collect();
 
         if ctx.dry_run {
@@ -214,6 +228,7 @@ pub fn http_command_runner(
     ctx: &Context,
     runner: &CommandRunnerKind,
     data: &Word,
+    rand: &mut Rand,
 ) -> FResult<(Option<i32>, Word)> {
     if let CommandRunnerKind::Http {
         url,
@@ -221,7 +236,7 @@ pub fn http_command_runner(
         cmd_arg_target,
     } = runner
     {
-        let url = replace_fuzz(url, cmd_arg_target, data);
+        let url = replace_fuzz(url, cmd_arg_target, ctx, rand)?;
         if ctx.dry_run {
             Ok((None, url.as_bytes().to_owned()))
         } else {
@@ -316,6 +331,7 @@ pub struct ContextIter {
     count: u32,
     n_run: u32,
     pub ctx: Context,
+    rand: Rand,
     input: Vec<u8>,
 }
 
@@ -324,6 +340,7 @@ impl ContextIter {
         Ok(ContextIter {
             n_run: cfg.n_run,
             count: 0,
+            rand: cfg.rand(),
             ctx: Context::from_cfg(cfg)?,
             input: Context::read_all(&mut cfg.input()?)?,
         })
@@ -336,7 +353,7 @@ impl std::iter::Iterator for ContextIter {
     fn next(&mut self) -> Option<Self::Item> {
         if self.count < self.n_run {
             self.count += 1;
-            Some(self.ctx.apply(&self.input))
+            Some(self.ctx.apply(&self.input, &mut self.rand))
         } else {
             None
         }
@@ -347,7 +364,6 @@ impl std::iter::Iterator for ContextIter {
 pub struct Context {
     words: Vec<Word>,
     target: Target,
-    rand: Rand,
 
     expect: Vec<Expect>,
 
@@ -367,7 +383,6 @@ impl Context {
         Ok(Self {
             words: cfg.words()?,
             target: Target::Word(cfg.target.to_owned().into_bytes()),
-            rand: cfg.rand(),
 
             expect: Expect::from_cfg(cfg)?,
 
@@ -378,8 +393,8 @@ impl Context {
         })
     }
 
-    fn select_word(&mut self) -> FResult<&Word> {
-        let index = self.rand.next_range(0, self.words.len() as u64)?;
+    fn select_word(&self, rand: &mut Rand) -> FResult<&Word> {
+        let index = rand.next_range(0, self.words.len() as u64)?;
 
         Ok(&self.words[(index as usize).min(self.words.len() - 1)])
     }
@@ -433,9 +448,9 @@ impl Context {
         Ok(())
     }
 
-    fn maybe_exec(&mut self, data: &Word) -> FResult<ExecRes> {
+    fn maybe_exec(&self, data: &Word, rand: &mut Rand) -> FResult<ExecRes> {
         if let Some(runner) = &self.runner {
-            runner.run_and_expect(self, data)
+            runner.run_and_expect(self, data, rand)
         } else {
             Ok(ExecRes {
                 exit_code: ExitCodes::Success,
@@ -445,11 +460,11 @@ impl Context {
         }
     }
 
-    fn apply_next(&mut self, input: &[u8], result: &mut Word) -> FResult<usize> {
+    fn apply_next(&self, input: &[u8], result: &mut Word, rand: &mut Rand) -> FResult<usize> {
         if input.is_empty() {
             Ok(0)
         } else if self.target.should_replace(input) {
-            let word = &self.select_word()?;
+            let word = &self.select_word(rand)?;
             result.extend_from_slice(word);
             Ok(self.target.len())
         } else {
@@ -463,13 +478,13 @@ impl Context {
     /// into an output which is collected into a single Word
     /// (this can be disabled in Context's settings)
     /// It will also streams results into output if it is provided
-    pub fn apply(&mut self, input: &[u8]) -> FResult<ExecRes> {
+    pub fn apply(&self, input: &[u8], rand: &mut Rand) -> FResult<ExecRes> {
         debug!("Input: {:?}", input);
 
         let mut data = &input[0..];
         let mut result = Vec::new();
         while !data.is_empty() {
-            let read = self.apply_next(data, &mut result)?;
+            let read = self.apply_next(data, &mut result, rand)?;
             if read == 0 {
                 break;
             }
@@ -477,7 +492,7 @@ impl Context {
             data = &data[read..];
         }
 
-        let exec_res = self.maybe_exec(&result)?;
+        let exec_res = self.maybe_exec(&result, rand)?;
 
         debug!("Res: {:?}", exec_res);
         Ok(exec_res)
@@ -552,10 +567,10 @@ mod test {
             input: input.bytes().collect(),
             count: 0,
             n_run,
+            rand: Rand::from_seed(1),
             ctx: Context {
                 words: vec![b"123".to_vec(), b"45".to_vec(), b"abc".to_vec()],
                 target: Default::default(),
-                rand: Rand::from_seed(1),
                 expect: if let Some(expect) = expect {
                     vec![Expect::Equals(expect.to_owned())]
                 } else {
