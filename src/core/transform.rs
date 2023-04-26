@@ -615,12 +615,13 @@ impl Expect {
 mod test {
     use crate::core::{
         rand::Rand,
-        transform::{default_command_expect, ContextIter, Expect},
+        transform::{default_command_expect, http_command_runner, ContextIter, Expect},
     };
 
-    use super::{output_command_runner, Context, ExecRes, Word};
+    use super::{output_command_runner, Context, ExecRes};
+    use httpmock::prelude::*;
 
-    fn assert_apply(input: &str, expected: Vec<ExecRes>, n_run: u32, expect: Option<Word>) {
+    fn assert_apply(input: &str, expected: Vec<ExecRes>, n_run: u32, expect: Option<Expect>) {
         let mut ctx = ContextIter {
             input: input.bytes().collect(),
             count: 0,
@@ -630,7 +631,7 @@ mod test {
                 words: vec![b"123".to_vec(), b"45".to_vec(), b"abc".to_vec()],
                 target: Default::default(),
                 expect: if let Some(expect) = expect {
-                    vec![Expect::Equals(expect.to_owned())]
+                    vec![expect]
                 } else {
                     vec![]
                 },
@@ -676,7 +677,65 @@ mod test {
                 },
             ],
             2,
-            Some("{12: abc}".into()),
+            Some(Expect::Equals("{12: abc}".into())),
         );
+    }
+
+    fn assert_apply_http(url: &str, expected: Vec<ExecRes>, n_run: u32, expect: Option<Expect>) {
+        let mut ctx = ContextIter {
+            input: Default::default(),
+            count: 0,
+            n_run,
+            rand: Rand::from_seed(1),
+            ctx: Context {
+                words: vec![b"123".to_vec(), b"45".to_vec(), b"abc".to_vec()],
+                target: Default::default(),
+                expect: if let Some(expect) = expect {
+                    vec![expect]
+                } else {
+                    vec![]
+                },
+                no_stdin: false,
+                runner: Some(super::CommandRunner {
+                    kind: super::CommandRunnerKind::Http {
+                        url: url.to_owned(),
+                        headers: vec![],
+                        method: crate::core::config::HttpMethod::Get,
+                        no_headers: false,
+                        cmd_arg_target: Default::default(),
+                    },
+                    on_run: http_command_runner,
+                    on_expect: default_command_expect,
+                }),
+                dry_run: false,
+            },
+        };
+        let res: Vec<ExecRes> = ctx.try_collect().unwrap();
+
+        assert_eq!(expected, res);
+    }
+
+    #[test]
+    fn http() {
+        let server = MockServer::start();
+        let test_mock = server.mock(|when, then| {
+            when.method(GET).path("/test");
+            then.status(200)
+                .header("content-type", "text/html; charset=UTF-8")
+                .body("{}");
+        });
+
+        assert_apply_http(
+            &server.url("/test"),
+            vec![ExecRes {
+                exit_code: super::ExitCodes::Success,
+                out: b"{12: abc}".to_vec(),
+                fmt: super::OutputFmt::Expected,
+            }],
+            1,
+            Some(Expect::ExitCode(Some(200))),
+        );
+
+        test_mock.assert();
     }
 }
