@@ -27,6 +27,19 @@ pub enum RunnerKindConfig {
     None,
 }
 
+// Http method
+// TODO implement more methods in the future, use curl as --exec for now if needed
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub enum HttpMethod {
+    #[default]
+    Get,
+    Head,
+    Post,
+    Put,
+    Delete,
+}
+
 #[derive(Debug, Default)]
 #[cfg_attr(feature = "cli", derive(Parser))]
 #[cfg_attr(feature = "cli", command(author, version, about, long_about = None))]
@@ -71,8 +84,20 @@ pub struct Config {
     #[cfg_attr(feature = "cli", clap(long))]
     pub url: Option<String>,
 
-    #[cfg_attr(feature = "cli", clap(long))]
+    #[cfg_attr(
+        feature = "cli",
+        clap(long, help = "Specify a http header and value (header:value)")
+    )]
     pub header: Vec<String>,
+
+    #[cfg_attr(
+        feature = "cli",
+        clap(long, help = "Do not include headers in http response")
+    )]
+    pub no_headers: bool,
+
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub http_method: Option<HttpMethod>,
 
     #[cfg_attr(feature = "cli", clap(long, short, 
         help="The target substring that will be replaced with words. 

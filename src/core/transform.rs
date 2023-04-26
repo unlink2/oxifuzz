@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::{
-    config::Config,
+    config::{Config, HttpMethod},
     error::{Error, FResult},
     rand::Rand,
 };
@@ -61,6 +61,8 @@ pub enum CommandRunnerKind {
     Http {
         url: String,
         headers: Vec<String>,
+        method: HttpMethod,
+        no_headers: bool,
         cmd_arg_target: String,
     },
     Output,
@@ -106,6 +108,8 @@ impl CommandRunner {
                 kind: CommandRunnerKind::Http {
                     url: url.to_owned(),
                     headers: cfg.header.to_owned(),
+                    method: cfg.http_method.unwrap_or_default(),
+                    no_headers: cfg.no_headers,
                     cmd_arg_target: cfg.exec_target.to_owned(),
                 },
                 on_run: http_command_runner,
@@ -234,6 +238,8 @@ pub fn http_command_runner(
     if let CommandRunnerKind::Http {
         url,
         headers,
+        method,
+        no_headers,
         cmd_arg_target,
     } = runner
     {
@@ -241,17 +247,57 @@ pub fn http_command_runner(
         if ctx.dry_run {
             let mut output = Vec::new();
             output.write_all(url.as_bytes())?;
-            output.write_all(data)?;
+            if !headers.is_empty() {
+                output.write_all(b"\n\n")?;
+                for header in headers {
+                    output.write_all(header.as_bytes())?;
+                    output.write_all(b"\n")?;
+                }
+            }
+            if !data.is_empty() {
+                output.write_all(b"\n\n")?;
+                output.write_all(data)?;
+            }
             Ok((None, output))
         } else {
             // TODO add body, headers and implement other methods
             //      body should just be stdin input as with commands
             // TODO implement fuzzer insertion into url
             let client = reqwest::blocking::Client::new();
-            let resp = client.get(url).body(data.to_owned()).send()?;
+
+            let client = match method {
+                HttpMethod::Get => client.get(url),
+                HttpMethod::Head => client.head(url),
+                HttpMethod::Post => client.post(url),
+                HttpMethod::Put => client.put(url),
+                HttpMethod::Delete => client.delete(url),
+            };
+            let mut client = client.body(data.to_owned());
+
+            for header in headers {
+                let split = header.split_once(':').unwrap_or((header, ""));
+                client = client.header(split.0.to_owned(), split.1.to_owned());
+            }
+
+            let resp = client.send()?;
             let status = resp.status();
-            let body = resp.bytes()?.to_vec();
-            Ok((Some(status.as_u16().into()), body))
+
+            let mut output = Vec::new();
+
+            if !no_headers {
+                for header in resp.headers() {
+                    output.write_all(header.0.as_str().as_bytes())?;
+                    output.write_all(b":")?;
+                    output.write_all(header.1.as_bytes())?;
+                    output.write_all(b"\n")?;
+                }
+                if !resp.headers().is_empty() {
+                    output.write_all(b"\n\n")?;
+                }
+            }
+
+            output.write_all(&resp.bytes()?)?;
+            Ok((Some(status.as_u16().into()), output))
         }
     } else {
         Err(Error::UnsupportedCommandRunner)
