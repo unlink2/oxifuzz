@@ -285,6 +285,8 @@ pub fn http_command_runner(
             let mut output = Vec::new();
 
             if !no_headers {
+                output.write_all(status.as_str().as_bytes())?;
+                output.write_all(b"\n")?;
                 for header in resp.headers() {
                     output.write_all(header.0.as_str().as_bytes())?;
                     output.write_all(b":")?;
