@@ -9,7 +9,7 @@ use super::{
     rand::Rand,
 };
 use console::style;
-use log::{debug, error};
+use log::{debug, error, info};
 
 pub type Word = Vec<u8>;
 
@@ -206,6 +206,7 @@ pub fn shell_command_runner(
             output.write_all(data)?;
             Ok((None, output))
         } else {
+            info!("Running {} {:?}", cmd, args);
             let args: Vec<&str> = args.iter().map(|x| x.as_ref()).collect();
 
             let mut child = Command::new(cmd)
@@ -244,6 +245,12 @@ pub fn http_command_runner(
     } = runner
     {
         let url = replace_fuzz(url, cmd_arg_target, ctx, rand)?;
+
+        let headers: Vec<String> = headers
+            .iter()
+            .map(|x| replace_fuzz(x, cmd_arg_target, ctx, rand))
+            .try_collect()?;
+
         if ctx.dry_run {
             let mut output = Vec::new();
             output.write_all(url.as_bytes())?;
@@ -260,9 +267,7 @@ pub fn http_command_runner(
             }
             Ok((None, output))
         } else {
-            // TODO add body, headers and implement other methods
-            //      body should just be stdin input as with commands
-            // TODO implement fuzzer insertion into url
+            info!("Running {} {:?}", url, headers);
             let client = reqwest::blocking::Client::new();
 
             let client = match method {
@@ -275,7 +280,7 @@ pub fn http_command_runner(
             let mut client = client.body(data.to_owned());
 
             for header in headers {
-                let split = header.split_once(':').unwrap_or((header, ""));
+                let split = header.split_once(':').unwrap_or((&header, ""));
                 client = client.header(split.0.to_owned(), split.1.to_owned());
             }
 
