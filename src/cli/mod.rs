@@ -36,6 +36,7 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
     ctx.try_for_each(|x| {
         if let Err(x) = &x {
             error!("{:?}", x);
+            overall_exit_code = ExitCodes::RunnerFailed;
             if cfg.no_fail_on_err {
                 return Ok(());
             }
