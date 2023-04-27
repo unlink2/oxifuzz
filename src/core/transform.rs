@@ -58,6 +58,7 @@ pub enum CommandRunnerKind {
         cmd: String,
         cmd_args: Vec<String>,
         cmd_arg_target: String,
+        no_stdin: bool,
     },
     Http {
         url: String,
@@ -86,6 +87,7 @@ impl CommandRunner {
                     cmd,
                     cmd_args: cfg.cmd_args()?.unwrap_or(vec![]),
                     cmd_arg_target: cfg.exec_target.to_owned(),
+                    no_stdin: cfg.no_stdin,
                 },
                 on_run: shell_command_runner,
                 on_expect: default_command_expect,
@@ -192,6 +194,7 @@ pub fn shell_command_runner(
         cmd,
         cmd_args,
         cmd_arg_target,
+        no_stdin,
     } = runner
     {
         let args: Vec<String> = cmd_args
@@ -218,7 +221,7 @@ pub fn shell_command_runner(
                 .stdout(Stdio::piped())
                 .spawn()?;
 
-            if !ctx.no_stdin {
+            if !no_stdin {
                 let mut child_in = BufWriter::new(child.stdin.as_mut().unwrap());
                 child_in.write_all(data)?;
             }
@@ -431,8 +434,6 @@ pub struct Context {
 
     expect: Vec<Expect>,
 
-    no_stdin: bool,
-
     runner: Option<CommandRunner>,
 
     dry_run: bool,
@@ -449,8 +450,6 @@ impl Context {
             target: Target::Word(cfg.target.to_owned().into_bytes()),
 
             expect: Expect::from_cfg(cfg)?,
-
-            no_stdin: cfg.no_stdin,
 
             runner,
             dry_run: cfg.dry_run,
@@ -640,7 +639,6 @@ mod test {
                 } else {
                     vec![]
                 },
-                no_stdin: false,
                 runner: Some(super::CommandRunner {
                     kind: super::CommandRunnerKind::Output,
                     on_run: output_command_runner,
