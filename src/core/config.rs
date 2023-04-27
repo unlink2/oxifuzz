@@ -123,6 +123,9 @@ pub struct Config {
     #[cfg_attr(feature = "cli", clap(long, short, default_value_t = 1))]
     pub n_run: u32,
 
+    #[cfg_attr(feature = "cli", clap(long, default_value_t = 1))]
+    pub n_thread: u32,
+
     #[cfg_attr(feature = "cli", clap(long, default_value = "\n"))]
     pub word_list_term: String,
 

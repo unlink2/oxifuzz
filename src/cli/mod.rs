@@ -33,22 +33,23 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
     let mut overall_exit_code = ExitCodes::Success;
     let mut ctx = ContextIter::from_cfg(cfg)?;
 
-    // TODO make ctx thread safe and
-    // use rayon's ctx.par_bridge.try_for_each for
-    // threading
-    ctx.try_for_each(|x| {
-        if let Err(x) = &x {
-            error!("{:?}", x);
-            overall_exit_code = ExitCodes::RunnerFailed;
-            if cfg.no_fail_on_err {
-                return Ok(());
+    // TODO a new ctx for each thread and run them all
+    // and wait for all of them to finish
+    for _ in 0..cfg.n_thread {
+        ctx.try_for_each(|x| {
+            if let Err(x) = &x {
+                error!("{:?}", x);
+                overall_exit_code = ExitCodes::RunnerFailed;
+                if cfg.no_fail_on_err {
+                    return Ok(());
+                }
             }
-        }
-        let x = x?;
-        if x.exit_code.is_failure() {
-            overall_exit_code = x.exit_code;
-        }
-        Context::output(cfg, &mut output, &x.out, &x.fmt)
-    })?;
+            let x = x?;
+            if x.exit_code.is_failure() {
+                overall_exit_code = x.exit_code;
+            }
+            Context::output(cfg, &mut output, &x.out, &x.fmt)
+        })?;
+    }
     Ok(overall_exit_code)
 }
