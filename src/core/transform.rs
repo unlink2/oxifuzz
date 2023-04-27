@@ -1,6 +1,7 @@
 use std::{
     io::{BufReader, BufWriter, Write},
     process::{Command, Stdio},
+    time::Duration,
 };
 
 use super::{
@@ -63,6 +64,7 @@ pub enum CommandRunnerKind {
         headers: Vec<String>,
         method: HttpMethod,
         no_headers: bool,
+        timeout: u32,
         cmd_arg_target: String,
     },
     Output,
@@ -110,6 +112,7 @@ impl CommandRunner {
                     headers: cfg.header.to_owned(),
                     method: cfg.http_method.unwrap_or_default(),
                     no_headers: cfg.no_headers,
+                    timeout: cfg.http_timeout.unwrap_or(30),
                     cmd_arg_target: cfg.exec_target.to_owned(),
                 },
                 on_run: http_command_runner,
@@ -241,6 +244,7 @@ pub fn http_command_runner(
         headers,
         method,
         no_headers,
+        timeout,
         cmd_arg_target,
     } = runner
     {
@@ -284,7 +288,9 @@ pub fn http_command_runner(
                 client = client.header(split.0.to_owned(), split.1.to_owned());
             }
 
-            let resp = client.send()?;
+            let resp = client
+                .timeout(Duration::from_secs(*timeout as u64))
+                .send()?;
             let status = resp.status();
 
             let mut output = Vec::new();

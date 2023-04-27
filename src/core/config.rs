@@ -99,6 +99,9 @@ pub struct Config {
     #[cfg_attr(feature = "cli", clap(long))]
     pub http_method: Option<HttpMethod>,
 
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub http_timeout: Option<u32>,
+
     #[cfg_attr(feature = "cli", clap(long, short, 
         help="The target substring that will be replaced with words. 
         If the target string appears in the cli arguments it will be replaced with an entire iteration's output, otherwise the output will be passed in via stdin.", 
