@@ -33,6 +33,9 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
     let mut overall_exit_code = ExitCodes::Success;
     let mut ctx = ContextIter::from_cfg(cfg)?;
 
+    // TODO make ctx thread safe and
+    // use rayon's ctx.par_bridge.try_for_each for
+    // threading
     ctx.try_for_each(|x| {
         if let Err(x) = &x {
             error!("{:?}", x);
