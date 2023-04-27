@@ -4,7 +4,7 @@ use crate::core::{
     transform::{Context, ContextIter, ExitCodes},
 };
 
-use log::LevelFilter;
+use log::{error, LevelFilter};
 use simple_logger::SimpleLogger;
 
 fn verbose_to_level_filter(v: u8) -> LevelFilter {
@@ -34,6 +34,12 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
     let mut ctx = ContextIter::from_cfg(cfg)?;
 
     ctx.try_for_each(|x| {
+        if let Err(x) = &x {
+            error!("{:?}", x);
+            if cfg.no_fail_on_err {
+                return Ok(());
+            }
+        }
         let x = x?;
         if x.exit_code.is_failure() {
             overall_exit_code = x.exit_code;
