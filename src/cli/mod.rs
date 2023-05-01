@@ -4,7 +4,7 @@ use crate::core::{
     transform::{Context, ContextIter, ExitCodes},
 };
 
-use log::{error, LevelFilter};
+use log::{error, trace, LevelFilter};
 use simple_logger::SimpleLogger;
 
 fn verbose_to_level_filter(v: u8) -> LevelFilter {
@@ -32,6 +32,7 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
     let mut output = cfg.output()?;
     let mut overall_exit_code = ExitCodes::Success;
     let mut ctx = ContextIter::from_cfg(cfg)?;
+    let delay = std::time::Duration::from_millis(cfg.delay);
 
     // TODO a new ctx for each thread and run them all
     // and wait for all of them to finish
@@ -48,7 +49,10 @@ pub fn init(cfg: &Config) -> FResult<ExitCodes> {
             if x.exit_code.is_failure() {
                 overall_exit_code = x.exit_code;
             }
-            Context::output(cfg, &mut output, &x.out, &x.fmt)
+            let res = Context::output(cfg, &mut output, &x.out, &x.fmt);
+            trace!("Sleeping for {} ms", delay.as_millis());
+            std::thread::sleep(delay);
+            res
         })?;
     }
     Ok(overall_exit_code)

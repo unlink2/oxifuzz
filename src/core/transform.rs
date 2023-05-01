@@ -15,6 +15,7 @@ use log::{debug, error, info};
 pub type Word = Vec<u8>;
 
 pub const DEFAULT_TARGET_WORD: &str = "OXIFUZZ";
+pub const DEFAULT_USER_AGENT: &str = "oxifuss/0.1";
 
 #[derive(Clone)]
 pub enum Target {
@@ -284,7 +285,9 @@ pub fn http_command_runner(
                 HttpMethod::Put => client.put(url),
                 HttpMethod::Delete => client.delete(url),
             };
-            let mut client = client.body(data.to_owned());
+            let mut client = client
+                .body(data.to_owned())
+                .header("User-Agent", DEFAULT_USER_AGENT);
 
             for header in headers {
                 let split = header.split_once(':').unwrap_or((&header, ""));
@@ -292,7 +295,7 @@ pub fn http_command_runner(
             }
 
             let resp = client
-                .timeout(Duration::from_secs(*timeout as u64))
+                .timeout(Duration::from_millis(*timeout as u64))
                 .send()?;
             let status = resp.status();
 

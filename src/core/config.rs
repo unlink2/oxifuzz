@@ -99,7 +99,7 @@ pub struct Config {
     #[cfg_attr(feature = "cli", clap(long))]
     pub http_method: Option<HttpMethod>,
 
-    #[cfg_attr(feature = "cli", clap(long))]
+    #[cfg_attr(feature = "cli", clap(long, help = "Http request timeout in ms"))]
     pub http_timeout: Option<u32>,
 
     #[cfg_attr(feature = "cli", clap(long, short, 
@@ -125,6 +125,12 @@ pub struct Config {
 
     #[cfg_attr(feature = "cli", clap(long, default_value_t = 1))]
     pub n_thread: u32,
+
+    #[cfg_attr(
+        feature = "cli",
+        clap(long, default_value_t = 0, help = "Delay between teach run in ms")
+    )]
+    pub delay: u64,
 
     #[cfg_attr(feature = "cli", clap(long, default_value = "\n"))]
     pub word_list_term: String,
