@@ -275,27 +275,26 @@ pub fn http_command_runner(
             }
             Ok((None, output))
         } else {
+            use isahc::{prelude::*, Request};
             info!("Running {} {:?}", url, headers);
-            let client = reqwest::blocking::Client::new();
 
             let client = match method {
-                HttpMethod::Get => client.get(url),
-                HttpMethod::Head => client.head(url),
-                HttpMethod::Post => client.post(url),
-                HttpMethod::Put => client.put(url),
-                HttpMethod::Delete => client.delete(url),
+                HttpMethod::Get => Request::get(url),
+                HttpMethod::Head => Request::head(url),
+                HttpMethod::Post => Request::post(url),
+                HttpMethod::Put => Request::put(url),
+                HttpMethod::Delete => Request::delete(url),
             };
-            let mut client = client
-                .body(data.to_owned())
-                .header("User-Agent", DEFAULT_USER_AGENT);
+            let mut client = client.header("User-Agent", DEFAULT_USER_AGENT);
 
             for header in headers {
                 let split = header.split_once(':').unwrap_or((&header, ""));
                 client = client.header(split.0.to_owned(), split.1.to_owned());
             }
 
-            let resp = client
+            let mut resp = client
                 .timeout(Duration::from_millis(*timeout as u64))
+                .body(data.to_owned())?
                 .send()?;
             let status = resp.status();
 
