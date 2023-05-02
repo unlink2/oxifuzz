@@ -202,12 +202,12 @@ impl Config {
     pub fn output(&self) -> FResult<Box<dyn Write>> {
         Ok(if let Some(path) = &self.output {
             if path.to_str().unwrap_or("") == "-" {
-                Box::new(LineWriter::new(std::io::stdout().lock()))
+                Box::new(LineWriter::new(std::io::stdout()))
             } else {
                 Box::new(LineWriter::new(std::fs::File::create(path)?))
             }
         } else {
-            Box::new(LineWriter::new(std::io::stdout().lock()))
+            Box::new(LineWriter::new(std::io::stdout()))
         })
     }
 

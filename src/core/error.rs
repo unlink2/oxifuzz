@@ -23,5 +23,7 @@ pub enum Error {
     #[error(transparent)]
     ExitStatus(#[from] ExitStatusError),
     #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    IsahcHttp(#[from] isahc::http::Error),
+    #[error(transparent)]
+    Isahc(#[from] isahc::Error),
 }
