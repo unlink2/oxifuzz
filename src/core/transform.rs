@@ -15,7 +15,7 @@ use log::{debug, error, info};
 pub type Word = Vec<u8>;
 
 pub const DEFAULT_TARGET_WORD: &str = "OXIFUZZ";
-pub const DEFAULT_USER_AGENT: &str = "oxifuss/0.1";
+pub const DEFAULT_USER_AGENT: &str = "oxifuzz/0.1";
 
 #[derive(Clone)]
 pub enum Target {
