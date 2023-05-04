@@ -1,3 +1,5 @@
+pub mod jwt;
+
 use std::{
     io::{BufReader, BufWriter, Write},
     process::{Command, Stdio},
@@ -5,6 +7,8 @@ use std::{
 };
 
 use crate::core::transform::DEFAULT_USER_AGENT;
+
+use self::jwt::Jwt;
 
 use super::{
     config::{Config, HttpMethod},
@@ -42,6 +46,7 @@ pub enum CommandRunnerKind {
         timeout: u32,
         cmd_arg_target: String,
     },
+    Jwt(Jwt),
     Output,
     None,
 }
@@ -95,9 +100,13 @@ impl CommandRunner {
                 on_expect: default_command_expect,
             }))
         } else {
-            error!("Command url runner configured without an url!");
+            error!("Command url runner configured without a url!");
             Err(Error::InsufficientRunnerConfiguration)
         }
+    }
+
+    pub fn jwt_runner(cfg: &Config) -> FResult<Option<Self>> {
+        todo!()
     }
 
     fn auto_select_runner(cfg: &Config) -> FResult<Option<Self>> {
@@ -115,7 +124,8 @@ impl CommandRunner {
             super::config::RunnerKindConfig::Shell => Self::shell_runner(cfg),
             super::config::RunnerKindConfig::None => Self::auto_select_runner(cfg),
             super::config::RunnerKindConfig::Output => Self::output_runner(cfg),
-            super::config::RunnerKindConfig::Http => todo!(),
+            super::config::RunnerKindConfig::Http => Self::http_runner(cfg),
+            super::config::RunnerKindConfig::Jwt => Self::jwt_runner(cfg),
         }
     }
 

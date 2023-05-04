@@ -23,6 +23,7 @@ pub enum RunnerKindConfig {
     Shell,
     Output,
     Http,
+    Jwt,
     #[default]
     None,
 }
