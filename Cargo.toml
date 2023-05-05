@@ -29,5 +29,6 @@ regex = "1.7.3"
 isahc = "1.7"
 sha2 = "0.10.6"
 hmac = "0.12.1"
+base64 = "0.21.0"
 
 [dev-dependencies]

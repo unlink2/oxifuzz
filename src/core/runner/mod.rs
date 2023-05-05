@@ -8,7 +8,7 @@ use std::{
 
 use crate::core::transform::DEFAULT_USER_AGENT;
 
-use self::jwt::Jwt;
+use self::jwt::{jwt_command_runner, Jwt, Signature};
 
 use super::{
     config::{Config, HttpMethod},
@@ -106,7 +106,33 @@ impl CommandRunner {
     }
 
     pub fn jwt_runner(cfg: &Config) -> FResult<Option<Self>> {
-        todo!()
+        if let Some(header) = &cfg.jwt_header {
+            let signature = match cfg.jwt_signature {
+                super::config::SignatureConfig::HmacSha256 => {
+                    if let Some(secret) = &cfg.jwt_secret {
+                        Ok(Signature::HmacSha256 {
+                            secret: secret.to_owned(),
+                        })
+                    } else {
+                        Err(Error::InsufficientRunnerConfiguration)
+                    }
+                }
+                super::config::SignatureConfig::None => Ok(Signature::None),
+            }?;
+
+            Ok(Some(Self {
+                kind: CommandRunnerKind::Jwt(Jwt {
+                    signature,
+                    header: header.to_owned(),
+                    cmd_arg_target: cfg.exec_target.to_owned(),
+                }),
+                on_run: jwt_command_runner,
+                on_expect: default_command_expect,
+            }))
+        } else {
+            error!("Command url runner configured without a header!");
+            Err(Error::InsufficientRunnerConfiguration)
+        }
     }
 
     fn auto_select_runner(cfg: &Config) -> FResult<Option<Self>> {
@@ -114,6 +140,8 @@ impl CommandRunner {
             Self::shell_runner(cfg)
         } else if cfg.url.is_some() {
             Self::http_runner(cfg)
+        } else if cfg.jwt_header.is_some() {
+            Self::jwt_runner(cfg)
         } else {
             Self::output_runner(cfg)
         }
