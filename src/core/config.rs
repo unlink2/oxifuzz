@@ -23,6 +23,15 @@ pub enum RunnerKindConfig {
     Shell,
     Output,
     Http,
+    Jwt,
+    #[default]
+    None,
+}
+
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub enum SignatureConfig {
+    HmacSha256,
     #[default]
     None,
 }
@@ -101,6 +110,15 @@ pub struct Config {
 
     #[cfg_attr(feature = "cli", clap(long, help = "Http request timeout in ms"))]
     pub http_timeout: Option<u32>,
+
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub jwt_secret: Option<Word>,
+
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub jwt_header: Option<String>,
+
+    #[cfg_attr(feature = "cli", clap(long, default_value = "none"))]
+    pub jwt_signature: SignatureConfig,
 
     #[cfg_attr(feature = "cli", clap(long, short, 
         help="The target substring that will be replaced with words. 
