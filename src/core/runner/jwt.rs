@@ -75,7 +75,7 @@ impl Signature {
                 let key_pair = PKey::private_key_from_pem(key_pair)?;
                 let mut signer = Signer::new(MessageDigest::sha256(), &key_pair)?;
                 signer.update(data.as_bytes())?;
-                let signature = signer.sign_to_vec().unwrap();
+                let signature = signer.sign_to_vec()?;
                 Ok(Some(general_purpose::URL_SAFE_NO_PAD.encode(signature)))
             }
         }
