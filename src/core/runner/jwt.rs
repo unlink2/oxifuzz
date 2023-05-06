@@ -8,7 +8,9 @@ use crate::core::{
 };
 use base64::{engine::general_purpose, Engine as _};
 use hmac::{Hmac, Mac};
-use rsa::{pkcs8::DecodePrivateKey, Pkcs1v15Sign, RsaPrivateKey};
+use openssl::hash::MessageDigest;
+use openssl::pkey::PKey;
+use openssl::sign::Signer;
 use sha2::Sha256;
 
 use super::{replace_fuzz, CommandRunnerKind};
@@ -18,7 +20,7 @@ pub enum Signature {
     HmacSha256 {
         secret: Word,
     },
-    Rsa {
+    Rs256 {
         key_pair: Word,
     },
     #[default]
@@ -47,9 +49,9 @@ impl Signature {
                 }
             }
             SignatureConfig::None => Ok(Signature::None),
-            SignatureConfig::Rsa => {
+            SignatureConfig::Rs256 => {
                 if let Some(secret) = jwt_secret {
-                    Ok(Signature::Rsa { key_pair: secret })
+                    Ok(Signature::Rs256 { key_pair: secret })
                 } else {
                     Err(Error::InsufficientRunnerConfiguration)
                 }
@@ -69,13 +71,12 @@ impl Signature {
                 ))
             }
             Signature::None => Ok(Default::default()),
-            Signature::Rsa { key_pair } => {
-                // FIXME, maybe use sign_with_rng here...
-                // but in the end this tools is not for generating actual
-                // production jwt tokens, so it is probably fine
-                let priv_key = RsaPrivateKey::from_pkcs8_pem(&String::from_utf8_lossy(key_pair))?;
-                let enc_data = priv_key.sign(Pkcs1v15Sign::new_unprefixed(), data.as_bytes())?;
-                Ok(Some(general_purpose::URL_SAFE_NO_PAD.encode(enc_data)))
+            Signature::Rs256 { key_pair } => {
+                let key_pair = PKey::private_key_from_pem(key_pair)?;
+                let mut signer = Signer::new(MessageDigest::sha256(), &key_pair)?;
+                signer.update(data.as_bytes())?;
+                let signature = signer.sign_to_vec().unwrap();
+                Ok(Some(general_purpose::URL_SAFE_NO_PAD.encode(signature)))
             }
         }
     }

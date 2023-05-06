@@ -32,7 +32,7 @@ pub enum RunnerKindConfig {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub enum SignatureConfig {
     HmacSha256,
-    Rsa,
+    Rs256,
     #[default]
     None,
 }

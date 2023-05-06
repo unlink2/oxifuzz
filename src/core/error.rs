@@ -1,5 +1,6 @@
 use std::process::ExitStatusError;
 
+use openssl::error::ErrorStack;
 use thiserror::Error;
 
 pub type FResult<T> = Result<T, Error>;
@@ -29,7 +30,5 @@ pub enum Error {
     #[error(transparent)]
     Isahc(#[from] isahc::Error),
     #[error(transparent)]
-    Pkcs8(#[from] rsa::pkcs8::Error),
-    #[error(transparent)]
-    Rsa(#[from] rsa::Error),
+    OpenSsl(#[from] ErrorStack),
 }
