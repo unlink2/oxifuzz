@@ -26,7 +26,7 @@ impl Signature {
                 let mut mac = HmacSha256::new_from_slice(&secret).expect("");
                 mac.update(data.as_bytes());
 
-                Some(general_purpose::STANDARD_NO_PAD.encode(mac.finalize().into_bytes()))
+                Some(general_purpose::URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()))
             }
             Signature::None => Default::default(),
         }
@@ -47,13 +47,13 @@ pub fn jwt_command_runner(
     rand: &mut Rand,
 ) -> FResult<(Option<i32>, Word)> {
     if let CommandRunnerKind::Jwt(jwt) = &runner {
-        let encoded_header = general_purpose::STANDARD_NO_PAD.encode(&replace_fuzz(
+        let encoded_header = general_purpose::URL_SAFE_NO_PAD.encode(&replace_fuzz(
             &jwt.header,
             &jwt.cmd_arg_target,
             ctx,
             rand,
         )?);
-        let encoded_payload = general_purpose::STANDARD_NO_PAD.encode(data);
+        let encoded_payload = general_purpose::URL_SAFE_NO_PAD.encode(data);
 
         let encoded_without_signature = format!("{encoded_header}.{encoded_payload}");
 

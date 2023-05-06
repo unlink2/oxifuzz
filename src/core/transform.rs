@@ -311,8 +311,8 @@ mod test {
 
     use super::{Context, ExecRes};
 
-    fn assert_apply(input: &str, expected: Vec<ExecRes>, n_run: u32, expect: Option<Expect>) {
-        let mut ctx = ContextIter {
+    fn output_ctx(input: &str, n_run: u32, expect: Option<Expect>) -> ContextIter {
+        ContextIter {
             input: input.bytes().collect(),
             count: 0,
             n_run,
@@ -332,27 +332,27 @@ mod test {
                 }),
                 dry_run: false,
             },
-        };
-        let res: Vec<ExecRes> = ctx.try_collect().unwrap();
+        }
+    }
 
+    fn assert_apply(mut ctx: ContextIter, expected: Vec<ExecRes>) {
+        let res: Vec<ExecRes> = ctx.try_collect().unwrap();
         assert_eq!(expected, res);
     }
 
     #[test]
     fn success() {
         assert_apply(
-            "{12: OXIFUZZ}",
+            output_ctx("{12: OXIFUZZ}", 1, None),
             vec![ExecRes {
                 exit_code: super::ExitCodes::Success,
                 out: b"{12: abc}".to_vec(),
                 fmt: super::OutputFmt::None,
             }],
-            1,
-            None,
         );
 
         assert_apply(
-            "{12: OXIFUZZ}",
+            output_ctx("{12: OXIFUZZ}", 2, Some(Expect::Equals("{12: abc}".into()))),
             vec![
                 ExecRes {
                     exit_code: super::ExitCodes::Success,
@@ -365,8 +365,6 @@ mod test {
                     fmt: super::OutputFmt::NotExpected,
                 },
             ],
-            2,
-            Some(Expect::Equals("{12: abc}".into())),
         );
     }
 }
