@@ -31,4 +31,6 @@ pub enum Error {
     Isahc(#[from] isahc::Error),
     #[error(transparent)]
     OpenSsl(#[from] ErrorStack),
+    #[error(transparent)]
+    Hmac(#[from] hmac::digest::InvalidLength),
 }

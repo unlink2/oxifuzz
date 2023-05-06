@@ -63,7 +63,7 @@ impl Signature {
         match self {
             Signature::HmacSha256 { secret } => {
                 type HmacSha256 = Hmac<Sha256>;
-                let mut mac = HmacSha256::new_from_slice(&secret).expect("");
+                let mut mac = HmacSha256::new_from_slice(&secret)?;
                 mac.update(data.as_bytes());
 
                 Ok(Some(
