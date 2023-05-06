@@ -32,6 +32,7 @@ pub enum RunnerKindConfig {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub enum SignatureConfig {
     HmacSha256,
+    Rsa,
     #[default]
     None,
 }
@@ -113,6 +114,9 @@ pub struct Config {
 
     #[cfg_attr(feature = "cli", clap(long))]
     pub jwt_secret: Option<Word>,
+
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub jwt_secret_file: Option<PathBuf>,
 
     #[cfg_attr(feature = "cli", clap(long))]
     pub jwt_header: Option<String>,

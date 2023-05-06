@@ -16,6 +16,8 @@ pub enum Error {
     ArgError,
     #[error("Invalid regex")]
     InvalidRegex,
+    #[error("JWT Signature error")]
+    JwtSignatureError,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error(transparent)]
@@ -26,4 +28,8 @@ pub enum Error {
     IsahcHttp(#[from] isahc::http::Error),
     #[error(transparent)]
     Isahc(#[from] isahc::Error),
+    #[error(transparent)]
+    Pkcs8(#[from] rsa::pkcs8::Error),
+    #[error(transparent)]
+    Rsa(#[from] rsa::Error),
 }

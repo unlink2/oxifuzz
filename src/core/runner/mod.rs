@@ -8,7 +8,7 @@ use std::{
 
 use crate::core::transform::DEFAULT_USER_AGENT;
 
-use self::jwt::{jwt_command_runner, Jwt, Signature};
+use self::jwt::{jwt_command_runner, Jwt};
 
 use super::{
     config::{Config, HttpMethod},
@@ -107,19 +107,7 @@ impl CommandRunner {
 
     pub fn jwt_runner(cfg: &Config) -> FResult<Option<Self>> {
         if let Some(header) = &cfg.jwt_header {
-            let signature = match cfg.jwt_signature {
-                super::config::SignatureConfig::HmacSha256 => {
-                    if let Some(secret) = &cfg.jwt_secret {
-                        Ok(Signature::HmacSha256 {
-                            secret: secret.to_owned(),
-                        })
-                    } else {
-                        Err(Error::InsufficientRunnerConfiguration)
-                    }
-                }
-                super::config::SignatureConfig::None => Ok(Signature::None),
-            }?;
-
+            let signature = self::jwt::Signature::from_config(cfg)?;
             Ok(Some(Self {
                 kind: CommandRunnerKind::Jwt(Jwt {
                     signature,
