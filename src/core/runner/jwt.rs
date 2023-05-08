@@ -15,6 +15,7 @@ use sha2::Sha256;
 
 use super::{replace_fuzz, CommandRunnerKind};
 
+/// The signature algorithm used to sign a JWT token
 #[derive(Clone, Default)]
 pub enum Signature {
     HmacSha256 {
@@ -28,6 +29,7 @@ pub enum Signature {
 }
 
 impl Signature {
+    /// Generate a signature from a config struct
     pub fn from_config(cfg: &Config) -> FResult<Self> {
         let jwt_secret = if let Some(secret) = &cfg.jwt_secret {
             Some(secret.to_owned())
@@ -59,6 +61,7 @@ impl Signature {
         }
     }
 
+    /// sign input data using the signature algorithm
     pub fn sign(&self, data: &String) -> FResult<Option<String>> {
         match self {
             Signature::HmacSha256 { secret } => {
@@ -82,6 +85,7 @@ impl Signature {
     }
 }
 
+/// The jwt token including the header, a signature and a fuzzing keyword
 #[derive(Clone)]
 pub struct Jwt {
     pub header: String,
@@ -89,6 +93,9 @@ pub struct Jwt {
     pub cmd_arg_target: String,
 }
 
+/// The command runner for jwt tokens
+/// It applies fuzzing to the header, encodes the payload and data as base64 and signs the data
+/// Currently it does not support dry runs!
 pub fn jwt_command_runner(
     ctx: &Context,
     runner: &CommandRunnerKind,

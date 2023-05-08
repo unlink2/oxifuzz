@@ -12,6 +12,9 @@ pub type Word = Vec<u8>;
 pub const DEFAULT_TARGET_WORD: &str = "OXIFUZZ";
 pub const DEFAULT_USER_AGENT: &str = "oxifuzz/0.1";
 
+/// A target represents
+/// a string of bytes that will be replaced with random data
+/// from the word list
 #[derive(Clone)]
 pub enum Target {
     Word(Word),
@@ -24,6 +27,7 @@ impl Default for Target {
 }
 
 impl Target {
+    /// check if the target applies to the input data
     pub fn should_replace(&self, input: &[u8]) -> bool {
         match self {
             Target::Word(word) => input.starts_with(word),
@@ -37,6 +41,7 @@ impl Target {
     }
 }
 
+/// Possible exit values for runners
 #[derive(Copy, Clone, Eq, PartialEq, Default, Debug)]
 pub enum ExitCodes {
     #[default]
@@ -47,6 +52,7 @@ pub enum ExitCodes {
 }
 
 impl ExitCodes {
+    /// Some exit codes are failures
     pub fn is_failure(&self) -> bool {
         *self != ExitCodes::Success
     }
@@ -63,6 +69,7 @@ impl From<ExitCodes> for i32 {
     }
 }
 
+/// Execution response struct
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct ExecRes {
     pub exit_code: ExitCodes,
@@ -70,6 +77,7 @@ pub struct ExecRes {
     pub fmt: OutputFmt,
 }
 
+/// Possible formatting options
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum OutputFmt {
     #[default]
@@ -78,6 +86,7 @@ pub enum OutputFmt {
     NotExpected,
 }
 
+/// Iterator around context that can apply transforms to input data 0 to n times
 #[derive(Clone, Default)]
 pub struct ContextIter {
     count: u32,
@@ -88,6 +97,7 @@ pub struct ContextIter {
 }
 
 impl ContextIter {
+    /// Create from config
     pub fn from_cfg(cfg: &Config) -> FResult<Self> {
         Ok(ContextIter {
             n_run: cfg.n_run,
@@ -112,6 +122,7 @@ impl std::iter::Iterator for ContextIter {
     }
 }
 
+/// The runtime configuration for a transform
 #[derive(Clone, Default)]
 pub struct Context {
     words: Vec<Word>,
@@ -125,10 +136,12 @@ pub struct Context {
 }
 
 impl Context {
+    /// Create from config
     pub fn from_cfg(cfg: &Config) -> FResult<Self> {
         Self::from_cfg_with_runner(cfg, CommandRunner::from_cfg(cfg)?)
     }
 
+    /// create from config with a custom runner
     pub fn from_cfg_with_runner(cfg: &Config, runner: Option<CommandRunner>) -> FResult<Self> {
         Ok(Self {
             words: cfg.words()?,
@@ -141,18 +154,21 @@ impl Context {
         })
     }
 
+    /// select a word to replace the input data with
     pub fn select_word(&self, rand: &mut Rand) -> FResult<&Word> {
         let index = rand.next_range(0, self.words.len() as u64)?;
 
         Ok(&self.words[(index as usize).min(self.words.len() - 1)])
     }
 
+    /// Read all bytes from an input stream
     pub fn read_all(input: &mut dyn std::io::Read) -> FResult<Vec<u8>> {
         let mut buf = Vec::new();
         input.read_to_end(&mut buf)?;
         Ok(buf)
     }
 
+    /// Compares the expected value with the actual result
     pub fn compare_expected(&self, data: &Word, exit_code: Option<i32>) -> bool {
         for e in self.expect.iter() {
             if e.expect(data, exit_code) {
@@ -196,6 +212,7 @@ impl Context {
         Ok(())
     }
 
+    /// maybe execute a runner if one was supplied, if not simply echo the data
     fn maybe_exec(&self, data: &Word, rand: &mut Rand) -> FResult<ExecRes> {
         if let Some(runner) = &self.runner {
             runner.run_and_expect(self, data, rand)
@@ -208,6 +225,8 @@ impl Context {
         }
     }
 
+    /// apply the next transformation
+    /// and return the read bytes
     fn apply_next(&self, input: &[u8], result: &mut Word, rand: &mut Rand) -> FResult<usize> {
         if input.is_empty() {
             Ok(0)
@@ -247,6 +266,7 @@ impl Context {
     }
 }
 
+/// Expected result comparators
 #[derive(Clone)]
 pub enum Expect {
     Contains(Word),
@@ -257,6 +277,7 @@ pub enum Expect {
 }
 
 impl Expect {
+    /// create from config
     pub fn from_cfg(cfg: &Config) -> FResult<Vec<Self>> {
         let mut expects = Vec::default();
 
@@ -280,6 +301,7 @@ impl Expect {
         Ok(expects)
     }
 
+    /// compare expected data/exit code with actual data/exit code
     pub fn expect(&self, data: &Word, exit_code: Option<i32>) -> bool {
         match self {
             Expect::Contains(contains) => {
