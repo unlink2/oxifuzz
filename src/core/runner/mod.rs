@@ -1,7 +1,7 @@
 pub mod jwt;
 
 use std::{
-    io::{BufReader, BufWriter, Write},
+    io::{BufReader, BufWriter, Read, Write},
     process::{Command, Stdio},
     time::Duration,
 };
@@ -106,7 +106,18 @@ impl CommandRunner {
     }
 
     pub fn jwt_runner(cfg: &Config) -> FResult<Option<Self>> {
-        if let Some(header) = &cfg.jwt_header {
+        let header = if let Some(path) = &cfg.jwt_header_file {
+            let mut f = std::fs::File::open(path)?;
+            let mut buffer = Vec::new();
+            f.read_to_end(&mut buffer)?;
+            Some(String::from_utf8_lossy(&buffer).to_string())
+        } else if let Some(data) = &cfg.jwt_header {
+            Some(data.to_owned())
+        } else {
+            None
+        };
+
+        if let Some(header) = &header {
             let signature = self::jwt::Signature::from_config(cfg)?;
             Ok(Some(Self {
                 kind: CommandRunnerKind::Jwt(Jwt {
@@ -128,7 +139,7 @@ impl CommandRunner {
             Self::shell_runner(cfg)
         } else if cfg.url.is_some() {
             Self::http_runner(cfg)
-        } else if cfg.jwt_header.is_some() {
+        } else if cfg.jwt_header.is_some() || cfg.jwt_header_file.is_some() {
             Self::jwt_runner(cfg)
         } else {
             Self::output_runner(cfg)

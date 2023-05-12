@@ -120,6 +120,8 @@ pub struct Config {
 
     #[cfg_attr(feature = "cli", clap(long))]
     pub jwt_header: Option<String>,
+    #[cfg_attr(feature = "cli", clap(long))]
+    pub jwt_header_file: Option<PathBuf>,
 
     #[cfg_attr(feature = "cli", clap(long, default_value = "none"))]
     pub jwt_signature: SignatureConfig,
